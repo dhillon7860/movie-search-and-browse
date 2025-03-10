@@ -5,11 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Movie Details</title>
 
-    <!-- 
-      Basic styling for this page. 
-      The .star class controls the look of the rating stars, 
-      and .favorite highlights a button when a movie is marked as a favorite.
-    -->
     <style>
         .star {
             font-size: 24px;
@@ -23,15 +18,17 @@
             background-color: gold;
             color: black;
         }
+        .watchlist-movie {
+            margin-bottom: 10px;
+        }
+        #trending-results div {
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
 
-    <!-- 
-      Section: Display a specific movie's details.
-      These elements will be populated by JavaScript
-      after we fetch movie data from the server.
-    -->
+    <!-- Movie Details Section -->
     <h1 id="movie-title">Movie Title</h1>
     <p id="movie-synopsis">Movie Synopsis</p>
     <p id="release-date">Release Date</p>
@@ -42,45 +39,25 @@
       alt="Movie Poster"
     >
 
-    <!-- 
-      Container for watchlist-related buttons.
-      JavaScript will add an "Add to Watchlist" or "Remove from Watchlist" button here.
-    -->
     <div id="watchlist-buttons"></div>
-
-    <!-- 
-      Button to mark or unmark the current movie as a favorite.
-      JavaScript updates the text and style to show the current status.
-    -->
     <button id="favorite-button" onclick="toggleFavourite()">☆ Mark as Favourite</button>
 
-    <!-- 
-      Section: Search for new movies.
-      The user types a movie name and clicks 'Search' to see results below.
-    -->
+    <!-- Search Movies Section -->
     <h2>Search Movies</h2>
     <input type="text" id="movie-name-input" placeholder="Enter Movie Name">
     <button onclick="searchMovies()">Search</button>
-
-    <!-- 
-      Container to display the list of search results. 
-      Each result can be viewed in detail or added to the watchlist.
-    -->
     <div id="search-results"></div>
 
-    <!-- 
-      Section: Watchlist. 
-      Shows all the movies the user has added. 
-      JavaScript populates this area when the page loads.
-    -->
+    <!-- Trending Movies Section -->
+    <h2>Trending Movies</h2>
+    <button onclick="fetchTrendingMovies()">Load Trending Movies</button>
+    <div id="trending-results"></div>
+
+    <!-- Watchlist Section -->
     <h2>Your Watchlist</h2>
     <div id="watchlist-container"></div>
 
-    <!-- 
-      Section: Star rating.
-      The user can click on stars to select a rating, 
-      then submit that rating for the currently viewed movie.
-    -->
+    <!-- Rating Stars -->
     <h3>Rate this Movie</h3>
     <div id="star-rating">
         <span class="star" data-value="1">★</span>
@@ -90,12 +67,9 @@
         <span class="star" data-value="5">★</span>
     </div>
     <button onclick="submitRating()">Submit Rating</button>
+    <p id="rating-message" style="display: none;"></p>
 
-    <!-- 
-      Link to the JavaScript file that handles all movie interactions.
-      We set 'defer' so it loads after the HTML is parsed.
-    -->
+    <!-- JavaScript -->
     <script src="{{ url_for('static', filename='js/movie-details.js') }}" defer></script>
-
 </body>
 </html>

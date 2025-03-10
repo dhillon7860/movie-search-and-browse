@@ -1,20 +1,26 @@
 import sqlite3          # For connecting to our local SQLite database
 import requests         # For making requests to TMDB
-from flask import Flask, jsonify, request, render_template  # Flask for building our web server
-from flask_cors import CORS                                  # For allowing cross-origin requests
+import time             # For caching (timestamp checks)
+from flask import Flask, jsonify, request, render_template
+from flask_cors import CORS
 
-# We create an instance of Flask, specifying where to find templates and static files
 app = Flask(__name__, template_folder="templates", static_folder="static")
-CORS(app)  # This allows different domains or ports to talk to our Flask server
+CORS(app)  # Allow cross-origin requests
 
-# This is our personal API key for TMDB (The Movie Database)
+# Your TMDB API key
 TMDB_API_KEY = "05886b0a875a5f5f5258bef80f28dd71"
+
+# Simple in-memory cache for trending movies
+TRENDING_CACHE_DURATION = 60 * 5  # 5 minutes
+trending_cache = {
+    "data": None,
+    "timestamp": 0
+}
+
 
 def get_db_connection():
     """
     Opens a connection to the local 'watchlist.db' file.
-    We set 'row_factory' so each fetched row acts more like a dictionary,
-    which can make retrieving column data a bit more convenient.
     """
     conn = sqlite3.connect("watchlist.db")
     conn.row_factory = sqlite3.Row
@@ -24,22 +30,15 @@ def get_db_connection():
 def get_movie_details(movie_id):
     """
     Retrieves detailed information about a movie from TMDB using the provided numeric ID.
-    If the ID doesn't exist in TMDB, you'll receive a "Movie with ID X not found" message.
-    Otherwise, we'll return a JSON object that contains data like the title, overview,
-    release date, average rating, and a link to the poster image if available.
+    Returns JSON with fields like title, overview, release date, and poster URL.
     """
-    # We build the URL for TMDB's "movie details" endpoint using the movie ID
     tmdb_url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
 
     try:
-        # Make a GET request to TMDB
         response = requests.get(tmdb_url)
-        # If the status code indicates an error (4xx or 5xx), raise_for_status() will throw an exception
-        response.raise_for_status()
-        # Convert the response to JSON so we can read the movie details
+        response.raise_for_status()  # Raises HTTPError if 4xx or 5xx status
         movie_data = response.json()
 
-        # Return specific fields from the movie data as JSON
         return jsonify({
             "Title": movie_data.get("title", "N/A"),
             "Overview": movie_data.get("overview", "No synopsis available"),
@@ -53,34 +52,27 @@ def get_movie_details(movie_id):
         })
 
     except requests.exceptions.HTTPError as http_err:
-        # If the status code is 404, we specifically say the movie was not found.
-        # For other types of errors, we pass along the HTTP error message and status code.
         if http_err.response.status_code == 404:
             return jsonify({"error": f"Movie with ID {movie_id} not found on TMDB"}), 404
         else:
             return jsonify({"error": f"TMDB HTTP error: {str(http_err)}"}), http_err.response.status_code
     except requests.exceptions.RequestException as e:
-        # This block handles other network-related issues (like timeouts or DNS problems)
         print(f"API Error: {e}")
         return jsonify({"error": "Failed to fetch movie details"}), 500
 
 @app.route('/api/search', methods=['GET'])
 def search_movies():
     """
-    Allows you to search TMDB for movies that match a text query.
-    You must include a 'query' parameter in the URL, e.g. /api/search?query=Matrix
-    The endpoint returns a list of matching movies along with basic info like title and poster image.
+    Searches TMDB for movies that match the 'query' param (e.g. /api/search?query=Matrix).
+    Returns a JSON list of matching movies with basic info: title, overview, release date, rating, and poster.
     """
-    # We look for the 'query' parameter in the request
     query = request.args.get("query")
     if not query:
         return jsonify({"error": "Query parameter is required"}), 400
 
-    # Construct the TMDB URL to search by movie title
     tmdb_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={query}"
     response = requests.get(tmdb_url)
 
-    # If TMDB responds with a success code (200), we parse and return relevant data for each movie
     if response.status_code == 200:
         search_results = response.json().get("results", [])
         formatted_results = [
@@ -100,19 +92,58 @@ def search_movies():
         ]
         return jsonify({"results": formatted_results})
 
-    # If TMDB doesn't return a 200 status code, we let the user know we couldn't complete the search
     return jsonify({"error": "Failed to fetch search results"}), 500
+
+@app.route('/api/trending', methods=['GET'])
+def get_trending_movies():
+    """
+    Fetches trending movies from TMDB using /trending/movie/day.
+    Caches results in memory for 5 minutes to improve performance.
+    """
+    current_time = time.time()
+
+    # If cached data is still valid, return from cache
+    if (trending_cache["data"] is not None and
+        (current_time - trending_cache["timestamp"]) < TRENDING_CACHE_DURATION):
+        print("Serving trending movies from cache...")
+        return jsonify({"results": trending_cache["data"]})
+
+    # Otherwise, fetch from TMDB
+    tmdb_url = f"https://api.themoviedb.org/3/trending/movie/day?api_key={TMDB_API_KEY}"
+    response = requests.get(tmdb_url)
+
+    if response.status_code == 200:
+        trending_results = response.json().get("results", [])
+        formatted_results = [
+            {
+                "id": movie["id"],
+                "title": movie.get("title", "N/A"),
+                "overview": movie.get("overview", "No synopsis available"),
+                "release_date": movie.get("release_date", "Unknown"),
+                "rating": movie.get("vote_average", "N/A"),
+                "poster_url": (
+                    f"https://image.tmdb.org/t/p/w500{movie['poster_path']}"
+                    if movie.get("poster_path")
+                    else "https://via.placeholder.com/500x750?text=No+Image"
+                )
+            }
+            for movie in trending_results
+        ]
+        trending_cache["data"] = formatted_results
+        trending_cache["timestamp"] = current_time
+        print("Fetched trending movies from TMDB and cached the result.")
+        return jsonify({"results": formatted_results})
+    else:
+        return jsonify({"error": "Failed to fetch trending movies"}), 500
 
 @app.route('/api/watchlist', methods=['GET'])
 def get_watchlist():
     """
-    Returns the list of movies currently in our watchlist, along with a boolean
-    indicating whether each movie is marked as a favorite.
+    Returns the list of movies in our watchlist, along with whether each is favorited.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT movie_id, COALESCE(favourite, 0) FROM watchlist")
-    # Build a list of dictionaries that describes each watchlist entry
     movies = [{"movie_id": row[0], "favourite": bool(row[1])} for row in cursor.fetchall()]
     conn.close()
     return jsonify({"watchlist": movies})
@@ -120,9 +151,7 @@ def get_watchlist():
 @app.route('/api/watchlist', methods=['POST'])
 def add_to_watchlist():
     """
-    Adds a movie to our watchlist, given its ID in the JSON body.
-    If the movie is already in the database, we don't add it again,
-    but we'll respond with a message saying it's already there.
+    Adds a movie to the watchlist. If it's already present, we don't duplicate it.
     """
     data = request.json
     movie_id = data.get("movieId")
@@ -132,8 +161,6 @@ def add_to_watchlist():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    # Check if the movie is already in the watchlist
     cursor.execute("SELECT movie_id FROM watchlist WHERE movie_id = ?", (movie_id,))
     if cursor.fetchone():
         message = f"Movie {movie_id} is already in the watchlist."
@@ -148,9 +175,7 @@ def add_to_watchlist():
 @app.route('/api/watchlist', methods=['DELETE'])
 def remove_from_watchlist():
     """
-    Removes a movie from our watchlist, given its ID in the JSON body.
-    If it's not in the watchlist, there's no error— we just delete nothing.
-    Either way, we'll confirm that the movie was removed.
+    Removes a movie from the watchlist if present.
     """
     data = request.json
     movie_id = data.get("movieId")
@@ -160,7 +185,6 @@ def remove_from_watchlist():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    # Delete the entry, if it exists
     cursor.execute("DELETE FROM watchlist WHERE movie_id = ?", (movie_id,))
     conn.commit()
     conn.close()
@@ -170,9 +194,7 @@ def remove_from_watchlist():
 @app.route('/api/watchlist/favourite', methods=['PUT'])
 def toggle_favourite():
     """
-    Toggles a movie's 'favourite' status in the watchlist.
-    If the movie isn't in the watchlist at all, we'll respond with a 404 error.
-    Otherwise, we flip the 'favourite' bit from 0 to 1 or from 1 to 0.
+    Toggles the 'favourite' status for a movie in the watchlist.
     """
     data = request.json
     movie_id = data.get("movieId")
@@ -182,7 +204,6 @@ def toggle_favourite():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    # Get the current favourite status (0 or 1) for this movie
     cursor.execute("SELECT favourite FROM watchlist WHERE movie_id = ?", (movie_id,))
     result = cursor.fetchone()
 
@@ -190,7 +211,6 @@ def toggle_favourite():
         conn.close()
         return jsonify({"error": "Movie not found in watchlist"}), 404
 
-    # Flip the current status
     new_status = 1 if result[0] == 0 else 0
     cursor.execute("UPDATE watchlist SET favourite = ? WHERE movie_id = ?", (new_status, movie_id))
     conn.commit()
@@ -205,15 +225,12 @@ def toggle_favourite():
 @app.route('/')
 def home():
     """
-    Renders our main HTML page (movie.html). This is where you might have
-    your frontend code for searching movies, managing your watchlist, etc.
+    Renders our main HTML page (movie.html), which handles searching, watchlist, etc.
     """
     return render_template("movie.html")
 
 if __name__ == '__main__':
-    # Print out the registered routes so you can see what's available
     print("Registered Flask Routes:")
     for rule in app.url_map.iter_rules():
         print(f"{rule} -> {rule.methods}")
-    # Start the Flask server in debug mode, which automatically reloads on changes
     app.run(debug=True)

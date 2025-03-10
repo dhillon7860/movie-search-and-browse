@@ -1,16 +1,13 @@
-// This script handles fetching and displaying movie details,
-// managing the watchlist, toggling favorite status, and submitting ratings.
+// static/js/movie-details.js
 
-// Global variable to store the currently selected star rating
 let selectedRating = 0;
 
-// Extract the movie ID from the URL and load movie details when the page is fully loaded.
-// We also fetch the watchlist right away.
+// On page load, check URL for ?id=<movieID> and fetch details if present.
+// Also load the watchlist immediately.
 document.addEventListener("DOMContentLoaded", function () {
     const urlParams = new URLSearchParams(window.location.search);
     const movieId = urlParams.get("id");
 
-    // If the URL has a specific movie ID, fetch its details
     if (movieId) {
         fetchMovieDetails(movieId);
     }
@@ -26,19 +23,17 @@ async function fetchMovieDetails(movieId) {
     try {
         console.log(`Fetching details for Movie ID: ${movieId}`);
         const response = await fetch(apiUrl);
-
-        // If the response is not 2xx, we log a warning and update the UI with null
         if (!response.ok) {
             console.warn(`Movie ID ${movieId} not found or invalid.`);
             updateMovieUI(null);
             return;
         }
-
         const data = await response.json();
         console.log("Movie Data:", data);
 
         // Update the UI with the fetched movie data
         updateMovieUI(data);
+
         // Check if it's in the watchlist and if it's favorited
         checkIfInWatchlist(movieId);
         checkIfFavourite(movieId);
@@ -48,10 +43,8 @@ async function fetchMovieDetails(movieId) {
     }
 }
 
-// Update (PUT) the rating of a specific movie in the watchlist
+// Update (PUT) the rating of a specific movie in the watchlist (not shown in app.py above, but example usage)
 async function updateMovieRating(movieId, rating) {
-    console.log(`Sending a rating update for Movie ID: ${movieId} (rating: ${rating})`);
-
     try {
         const response = await fetch('/api/watchlist/rating', {
             method: 'PUT',
@@ -62,11 +55,8 @@ async function updateMovieRating(movieId, rating) {
         if (!response.ok) {
             throw new Error(`API Error: ${response.status} - ${await response.text()}`);
         }
-
         const data = await response.json();
         console.log("Server Response:", data);
-
-        // Display a message on the page to indicate success
         document.getElementById("rating-message").innerText = data.message;
     } catch (error) {
         console.error("Error updating rating:", error);
@@ -76,7 +66,6 @@ async function updateMovieRating(movieId, rating) {
 // Update the HTML elements on the page to reflect current movie details
 function updateMovieUI(data) {
     if (!data) {
-        // If data is null, we assume the movie wasn't found
         document.getElementById("movie-title").innerText = "Movie Not Found";
         document.getElementById("movie-synopsis").innerText = "Try searching for another movie.";
         document.getElementById("release-date").innerText = "";
@@ -85,7 +74,6 @@ function updateMovieUI(data) {
         return;
     }
 
-    // Populate movie details in the DOM
     document.getElementById("movie-title").innerText = data.Title || "Title not available";
     document.getElementById("movie-synopsis").innerText = data.Overview || "No synopsis available";
     document.getElementById("release-date").innerText = `Released: ${data["Release Date"]}`;
@@ -112,14 +100,13 @@ async function searchMovies() {
         console.log("Search Results:", data);
 
         const resultsContainer = document.getElementById("search-results");
-        resultsContainer.innerHTML = ""; // Clear any old results
+        resultsContainer.innerHTML = ""; // Clear old results
 
         if (!data.results || data.results.length === 0) {
             resultsContainer.innerHTML = "<p>No movies found. Try a different search term.</p>";
             return;
         }
 
-        // Display each matching movie with a button to view details or add to watchlist
         data.results.forEach(movie => {
             const movieDiv = document.createElement("div");
             movieDiv.innerHTML = `
@@ -139,7 +126,44 @@ async function searchMovies() {
     }
 }
 
-// Check if the given movie is in our watchlist and update button states accordingly
+// NEW: Fetch trending movies from our `/api/trending` endpoint
+async function fetchTrendingMovies() {
+    try {
+        const response = await fetch('/api/trending');
+        if (!response.ok) throw new Error("Failed to fetch trending movies");
+
+        const data = await response.json();
+        const trendingMovies = data.results || [];
+        console.log("Trending Movies:", trendingMovies);
+
+        const trendingContainer = document.getElementById("trending-results");
+        trendingContainer.innerHTML = "";
+
+        if (trendingMovies.length === 0) {
+            trendingContainer.innerHTML = "<p>No trending movies found.</p>";
+            return;
+        }
+
+        trendingMovies.forEach(movie => {
+            const movieDiv = document.createElement("div");
+            movieDiv.innerHTML = `
+                <strong>${movie.title} (${movie.release_date || "Unknown"})</strong>
+                <br>Rating: ${movie.rating}
+                <br>
+                <img src="${movie.poster_url}" alt="${movie.title}" width="100">
+                <br>
+                <button onclick="window.location.href='/?id=${movie.id}'">View Details</button>
+                <button onclick="addToWatchlist(${movie.id})">Add to Watchlist</button>
+            `;
+            trendingContainer.appendChild(movieDiv);
+        });
+    } catch (error) {
+        console.error("Error fetching trending movies:", error);
+        document.getElementById("trending-results").innerHTML = "<p>Failed to fetch trending movies.</p>";
+    }
+}
+
+// Check if the given movie is in our watchlist
 async function checkIfInWatchlist(movieId) {
     try {
         const response = await fetch('/api/watchlist');
@@ -147,16 +171,15 @@ async function checkIfInWatchlist(movieId) {
 
         const watchlistData = await response.json();
         const watchlist = watchlistData.watchlist || [];
-
-        // We check if this particular movie is in the watchlist
         const inList = watchlist.some(entry => entry.movie_id === parseInt(movieId));
+
         updateWatchlistButtons(movieId, inList);
     } catch (error) {
         console.error("Error checking watchlist:", error);
     }
 }
 
-// Check if the movie is marked as a favorite in the watchlist and update the favorite button
+// Check if the movie is favorited in the watchlist
 async function checkIfFavourite(movieId) {
     try {
         const response = await fetch('/api/watchlist');
@@ -164,8 +187,6 @@ async function checkIfFavourite(movieId) {
 
         const watchlistData = await response.json();
         const watchlist = watchlistData.watchlist || [];
-
-        // Look for the specific movie object in the watchlist array
         const movie = watchlist.find(m => m.movie_id == movieId);
         const isFavourite = movie ? movie.favourite : false;
 
@@ -175,7 +196,7 @@ async function checkIfFavourite(movieId) {
     }
 }
 
-// Add a movie to the watchlist by sending a POST request with the movie ID
+// Add a movie to the watchlist
 async function addToWatchlist(movieId) {
     try {
         const response = await fetch('/api/watchlist', {
@@ -183,11 +204,9 @@ async function addToWatchlist(movieId) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ movieId })
         });
-
         const data = await response.json();
         alert(data.message);
 
-        // Update the watchlist button and reload the watchlist display
         updateWatchlistButtons(movieId, true);
         loadWatchlist();
     } catch (error) {
@@ -195,7 +214,7 @@ async function addToWatchlist(movieId) {
     }
 }
 
-// Remove a movie from the watchlist by sending a DELETE request with the movie ID
+// Remove a movie from the watchlist
 async function removeFromWatchlist(movieId) {
     try {
         const response = await fetch('/api/watchlist', {
@@ -203,11 +222,9 @@ async function removeFromWatchlist(movieId) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ movieId })
         });
-
         const data = await response.json();
         alert(data.message);
 
-        // Update the watchlist button and reload the watchlist display
         updateWatchlistButtons(movieId, false);
         loadWatchlist();
     } catch (error) {
@@ -215,7 +232,7 @@ async function removeFromWatchlist(movieId) {
     }
 }
 
-// Update the "Add/Remove" watchlist button based on whether the movie is in the watchlist
+// Update the "Add/Remove" watchlist button
 function updateWatchlistButtons(movieId, isInWatchlist) {
     const watchlistContainer = document.getElementById("watchlist-buttons");
     watchlistContainer.innerHTML = "";
@@ -236,7 +253,7 @@ async function toggleFavourite(movieId) {
         return;
     }
 
-    console.log(`Sending request to toggle favorite for Movie ID: ${movieId}`);
+    console.log(`Toggling favorite status for Movie ID: ${movieId}`);
 
     try {
         const response = await fetch('/api/watchlist/favourite', {
@@ -244,22 +261,19 @@ async function toggleFavourite(movieId) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ movieId })
         });
-
         if (!response.ok) {
             throw new Error(`API Error: ${response.status} - ${await response.text()}`);
         }
 
         const data = await response.json();
         console.log("Toggle Favorite Response:", data);
-
-        // Update the favorite button with the new status
         updateFavouriteButton(movieId, data.favourite);
     } catch (error) {
         console.error("Error toggling favorite:", error);
     }
 }
 
-// When the page loads, we attach click listeners to the star elements for rating
+// Apply click listeners for star rating
 document.addEventListener("DOMContentLoaded", function () {
     const stars = document.querySelectorAll(".star");
     stars.forEach(star => {
@@ -271,20 +285,16 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 });
 
-// Highlight the stars up to the selected rating
+// Highlight stars up to the selected rating
 function highlightStars(rating) {
     const stars = document.querySelectorAll(".star");
     stars.forEach(star => {
         const value = parseInt(star.getAttribute("data-value"));
-        if (value <= rating) {
-            star.classList.add("selected");
-        } else {
-            star.classList.remove("selected");
-        }
+        star.classList.toggle("selected", value <= rating);
     });
 }
 
-// Send the selected rating to the server for the current movie
+// Send the selected rating to the server
 async function submitRating() {
     const urlParams = new URLSearchParams(window.location.search);
     const movieId = urlParams.get("id");
@@ -302,7 +312,6 @@ async function submitRating() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ movieId, rating: selectedRating })
         });
-
         const data = await response.json();
         if (response.ok) {
             document.getElementById("rating-message").innerText = data.message;
@@ -315,28 +324,23 @@ async function submitRating() {
     }
 }
 
-// Update the text and styling of the favorite button depending on its status
+// Update the text of the favorite button
 function updateFavouriteButton(movieId, isFavourite) {
     let favButton = document.getElementById(`fav-btn-${movieId}`);
-
-    // If the button isn't found in the watchlist list, look for the one on the movie details page
     if (!favButton) {
         favButton = document.getElementById("favorite-button");
     }
-
     if (!favButton) {
         console.warn(`Favorite button not found for Movie ID ${movieId}`);
         return;
     }
-
-    console.log(`Updating Favorite Button for ${movieId}: ${isFavourite ? "Favorite" : "Not Favorite"}`);
 
     favButton.innerText = isFavourite ? "Unfavourite" : "Mark as Favourite";
     favButton.classList.toggle("favorite", isFavourite);
     favButton.onclick = () => toggleFavourite(movieId);
 }
 
-// Load all movies from the watchlist and display them in the watchlist container
+// Load all movies from the watchlist
 async function loadWatchlist() {
     try {
         const response = await fetch('/api/watchlist');
@@ -348,7 +352,7 @@ async function loadWatchlist() {
         const watchlistContainer = document.getElementById("watchlist-container");
         watchlistContainer.innerHTML = "";
 
-        // For each movie ID in the watchlist, fetch its full data from the server
+        // For each watchlist movie, fetch details
         for (let movie of watchlist) {
             const movieResponse = await fetch(`/api/movie/${movie.movie_id}`);
             if (movieResponse.ok) {
@@ -378,5 +382,5 @@ async function loadWatchlist() {
     }
 }
 
-// Automatically load the watchlist once the entire window has loaded
+// Automatically load the watchlist once the window has loaded
 window.onload = loadWatchlist;
