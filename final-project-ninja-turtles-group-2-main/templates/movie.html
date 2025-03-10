@@ -1,75 +1,138 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Movie Details</title>
-
-    <style>
-        .star {
-            font-size: 24px;
-            cursor: pointer;
-            color: gray;
-        }
-        .star.selected {
-            color: gold;
-        }
-        .favorite {
-            background-color: gold;
-            color: black;
-        }
-        .watchlist-movie {
-            margin-bottom: 10px;
-        }
-        #trending-results div {
-            margin-bottom: 10px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>CineMate - Movie Details</title>
+  <style>
+    /* Basic page styling */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f8f9fa;
+    }
+    h1, h2, h3 {
+      margin-top: 1.2em;
+      margin-bottom: 0.5em;
+      color: #343a40;
+    }
+    /* Movie details section */
+    #movie-title {
+      font-size: 1.8em;
+      color: #007bff;
+    }
+    #movie-synopsis {
+      max-width: 600px;
+    }
+    /* Watchlist area */
+    .watchlist-movie {
+      margin-bottom: 20px;
+      border: 1px solid #ccc;
+      padding: 10px;
+      background: #fff;
+    }
+    .favorite {
+      background-color: gold;
+      color: black;
+    }
+    /* Rating stars */
+    .star {
+      font-size: 24px;
+      cursor: pointer;
+      color: gray;
+      margin: 0 2px;
+      user-select: none;
+    }
+    .star.selected {
+      color: gold;
+    }
+    /* Trending movies scroller */
+    #trending-results {
+      overflow-x: auto;
+      white-space: nowrap;
+      padding: 10px;
+      border: 1px solid #ccc;
+      background: #fff;
+    }
+    .trending-item {
+      display: inline-block;
+      vertical-align: top;
+      width: 150px;
+      margin-right: 10px;
+      text-align: center;
+      border: 1px solid #e3e3e3;
+      background: #fefefe;
+      padding: 5px;
+    }
+    /* Search results */
+    .search-result-item {
+      margin-bottom: 15px;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 10px;
+    }
+    /* Buttons */
+    button {
+      margin: 5px 0;
+      padding: 6px 12px;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    /* Rating message */
+    #rating-message {
+      color: green;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+  </style>
 </head>
 <body>
 
-    <!-- Movie Details Section -->
-    <h1 id="movie-title">Movie Title</h1>
-    <p id="movie-synopsis">Movie Synopsis</p>
-    <p id="release-date">Release Date</p>
-    <p id="movie-rating">Rating</p>
-    <img 
-      id="movie-poster" 
-      src="https://via.placeholder.com/500x750?text=No+Image" 
-      alt="Movie Poster"
-    >
+  <!-- Movie Details Section -->
+  <h1 id="movie-title">Movie Title</h1>
+  <p id="movie-synopsis">Movie Synopsis</p>
+  <p id="release-date">Release Date</p>
+  <p id="movie-rating">Rating</p>
+  <img 
+    id="movie-poster" 
+    src="https://via.placeholder.com/500x750?text=No+Image" 
+    alt="Movie Poster"
+  >
+  <div id="watchlist-buttons"></div>
+  <button id="favorite-button" onclick="toggleFavourite()">☆ Mark as Favourite</button>
 
-    <div id="watchlist-buttons"></div>
-    <button id="favorite-button" onclick="toggleFavourite()">☆ Mark as Favourite</button>
+  <!-- Rating Stars -->
+  <h3>Rate this Movie</h3>
+  <div id="star-rating">
+    <span class="star" data-value="1">★</span>
+    <span class="star" data-value="2">★</span>
+    <span class="star" data-value="3">★</span>
+    <span class="star" data-value="4">★</span>
+    <span class="star" data-value="5">★</span>
+  </div>
+  <button onclick="submitRating()">Submit Rating</button>
+  <p id="rating-message" style="display: none;"></p>
 
-    <!-- Search Movies Section -->
-    <h2>Search Movies</h2>
-    <input type="text" id="movie-name-input" placeholder="Enter Movie Name">
-    <button onclick="searchMovies()">Search</button>
-    <div id="search-results"></div>
+  <!-- Search Movies Section -->
+  <h2>Search Movies</h2>
+  <input type="text" id="movie-name-input" placeholder="Enter Movie Name">
+  <button onclick="searchMovies()">Search</button>
+  <div id="search-results"></div>
 
-    <!-- Trending Movies Section -->
-    <h2>Trending Movies</h2>
-    <button onclick="fetchTrendingMovies()">Load Trending Movies</button>
-    <div id="trending-results"></div>
+  <!-- Trending Movies Section (Horizontal Scroller) -->
+  <h2>Trending Movies</h2>
+  <div id="trending-results"></div>
 
-    <!-- Watchlist Section -->
-    <h2>Your Watchlist</h2>
-    <div id="watchlist-container"></div>
+  <!-- Watchlist Section -->
+  <h2>Your Watchlist</h2>
+  <div id="watchlist-container"></div>
 
-    <!-- Rating Stars -->
-    <h3>Rate this Movie</h3>
-    <div id="star-rating">
-        <span class="star" data-value="1">★</span>
-        <span class="star" data-value="2">★</span>
-        <span class="star" data-value="3">★</span>
-        <span class="star" data-value="4">★</span>
-        <span class="star" data-value="5">★</span>
-    </div>
-    <button onclick="submitRating()">Submit Rating</button>
-    <p id="rating-message" style="display: none;"></p>
-
-    <!-- JavaScript -->
-    <script src="{{ url_for('static', filename='js/movie-details.js') }}" defer></script>
+  <!-- JavaScript -->
+  <script src="{{ url_for('static', filename='js/movie-details.js') }}" defer></script>
 </body>
 </html>
