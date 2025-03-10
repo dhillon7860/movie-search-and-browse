@@ -7,9 +7,10 @@ from flask_cors import CORS
 app = Flask(__name__, template_folder="templates", static_folder="static")
 CORS(app)
 
+# PUT YOUR REAL KEY HERE
 TMDB_API_KEY = "05886b0a875a5f5f5258bef80f28dd71"
 
-TRENDING_CACHE_DURATION = 60 * 5  # 5 minutes
+TRENDING_CACHE_DURATION = 300  # 5 minutes
 trending_cache = {
     "data": None,
     "timestamp": 0
@@ -30,7 +31,48 @@ def init_db():
 
 @app.route('/')
 def home():
+    """Renders the multi-tab single page (movie.html)."""
     return render_template("movie.html")
+
+@app.route('/api/trending', methods=['GET'])
+def get_trending_movies():
+    """
+    Returns trending movies from TMDb (/trending/movie/day).
+    Caches results for 5 minutes to reduce API calls.
+    Logs status code so you can see if TMDb is returning 200 or an error.
+    """
+    now = time.time()
+    if trending_cache["data"] and (now - trending_cache["timestamp"] < TRENDING_CACHE_DURATION):
+        print("Serving trending movies from cache...")
+        return jsonify({"results": trending_cache["data"]})
+
+    url = f"https://api.themoviedb.org/3/trending/movie/day?api_key={TMDB_API_KEY}"
+    resp = requests.get(url)
+    print("TMDb trending endpoint status:", resp.status_code)  # Debug log
+
+    if resp.status_code == 200:
+        data = resp.json().get("results", [])
+        results = []
+        for m in data:
+            results.append({
+                "id": m["id"],
+                "title": m.get("title", "N/A"),
+                "overview": m.get("overview", ""),
+                "release_date": m.get("release_date", "Unknown"),
+                "rating": m.get("vote_average", "N/A"),
+                "poster_url": (
+                    f"https://image.tmdb.org/t/p/w500{m.get('poster_path')}"
+                    if m.get("poster_path")
+                    else "https://via.placeholder.com/500x750?text=No+Image"
+                )
+            })
+        trending_cache["data"] = results
+        trending_cache["timestamp"] = now
+        print("Fetched trending movies from TMDB and cached the result.")
+        return jsonify({"results": results})
+    else:
+        print("TMDb trending fetch failed. Status code:", resp.status_code, "Body:", resp.text)
+        return jsonify({"error": "Failed to fetch trending movies"}), 500
 
 @app.route('/api/search', methods=['GET'])
 def search_movies():
@@ -65,9 +107,9 @@ def search_movies():
 
     if resp.status_code == 200:
         data = resp.json().get("results", [])
-        formatted_results = []
+        formatted = []
         for movie in data:
-            formatted_results.append({
+            formatted.append({
                 "id": movie["id"],
                 "title": movie.get("title", "N/A"),
                 "overview": movie.get("overview", "No synopsis available"),
@@ -79,40 +121,9 @@ def search_movies():
                     else "https://via.placeholder.com/500x750?text=No+Image"
                 )
             })
-        return jsonify({"results": formatted_results})
+        return jsonify({"results": formatted})
     else:
         return jsonify({"error": "Failed to fetch search results"}), 500
-
-@app.route('/api/trending', methods=['GET'])
-def get_trending_movies():
-    now = time.time()
-    if trending_cache["data"] and (now - trending_cache["timestamp"] < TRENDING_CACHE_DURATION):
-        print("Serving trending movies from cache...")
-        return jsonify({"results": trending_cache["data"]})
-
-    url = f"https://api.themoviedb.org/3/trending/movie/day?api_key={TMDB_API_KEY}"
-    resp = requests.get(url)
-    if resp.status_code == 200:
-        data = resp.json().get("results", [])
-        formatted = []
-        for m in data:
-            formatted.append({
-                "id": m["id"],
-                "title": m.get("title", "N/A"),
-                "overview": m.get("overview", "No synopsis available"),
-                "release_date": m.get("release_date", "Unknown"),
-                "rating": m.get("vote_average", "N/A"),
-                "poster_url": (
-                    f"https://image.tmdb.org/t/p/w500{m.get('poster_path')}"
-                    if m.get("poster_path")
-                    else "https://via.placeholder.com/500x750?text=No+Image"
-                )
-            })
-        trending_cache["data"] = formatted
-        trending_cache["timestamp"] = now
-        print("Fetched trending movies from TMDB and cached the result.")
-        return jsonify({"results": formatted})
-    return jsonify({"error": "Failed to fetch trending movies"}), 500
 
 @app.route('/api/movie/<int:movie_id>', methods=['GET'])
 def get_movie_details(movie_id):
@@ -166,38 +177,6 @@ def get_movie_details(movie_id):
     except requests.exceptions.RequestException as e:
         print("API Error:", e)
         return jsonify({"error": "Failed to fetch movie details"}), 500
-
-@app.route('/api/movie/<int:movie_id>/recommendations', methods=['GET'])
-def get_movie_recommendations(movie_id):
-    base_url = "https://api.themoviedb.org/3"
-    params = {"api_key": TMDB_API_KEY, "language": "en-US"}
-    try:
-        resp = requests.get(f"{base_url}/movie/{movie_id}/recommendations", params=params)
-        resp.raise_for_status()
-        rec_data = resp.json().get("results", [])
-        rec_list = []
-        for r in rec_data[:10]:
-            rec_list.append({
-                "id": r["id"],
-                "title": r.get("title", "N/A"),
-                "overview": r.get("overview", "No synopsis available"),
-                "release_date": r.get("release_date", "Unknown"),
-                "rating": r.get("vote_average", "N/A"),
-                "poster_url": (
-                    f"https://image.tmdb.org/t/p/w500{r.get('poster_path')}"
-                    if r.get("poster_path")
-                    else "https://via.placeholder.com/500x750?text=No+Image"
-                )
-            })
-        return jsonify({"recommendations": rec_list})
-    except requests.exceptions.HTTPError as http_err:
-        if http_err.response.status_code == 404:
-            return jsonify({"error": f"No recommendations found for {movie_id}."}), 404
-        else:
-            return jsonify({"error": f"TMDB HTTP error: {str(http_err)}"}), http_err.response.status_code
-    except requests.exceptions.RequestException as e:
-        print("API Error:", e)
-        return jsonify({"error": "Failed to fetch recommendations"}), 500
 
 @app.route('/api/watchlist', methods=['GET'])
 def get_watchlist():
@@ -264,8 +243,7 @@ def toggle_favourite():
         conn.close()
         return jsonify({"error": "Movie not found in watchlist"}), 404
 
-    current_fav = row[0]
-    new_status = 1 if current_fav == 0 else 0
+    new_status = 1 if row[0] == 0 else 0
     c.execute("UPDATE watchlist SET favourite = ? WHERE movie_id = ?", (new_status, movie_id))
     conn.commit()
     conn.close()

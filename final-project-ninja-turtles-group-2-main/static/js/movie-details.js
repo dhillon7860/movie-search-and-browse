@@ -3,20 +3,18 @@
 let selectedRating = 0;
 
 document.addEventListener("DOMContentLoaded", function () {
-  // Load trending
-  fetchTrendingMovies();
+  console.log("DOM loaded, calling fetchTrendingMovies() to show trending...");
+  fetchTrendingMovies(); // Attempt to get trending right away
 
-  // If there's ?id in the URL, show that movie's details
   const urlParams = new URLSearchParams(window.location.search);
   const movieId = urlParams.get("id");
   if (movieId) {
     fetchMovieDetails(movieId);
   }
 
-  // Load watchlist
   loadWatchlist();
 
-  // Setup star rating clicks for detail section
+  // star rating events
   const stars = document.querySelectorAll(".star");
   stars.forEach(star => {
     star.addEventListener("click", () => {
@@ -41,26 +39,22 @@ async function searchMovies() {
     alert("Please enter a movie name!");
     return;
   }
-
   try {
     const resp = await fetch(`/api/search?query=${encodeURIComponent(query)}`);
     if (!resp.ok) throw new Error("Search fetch error");
-
     const data = await resp.json();
     const results = data.results || [];
 
-    // Unhide the #simple-search-section
     const simpleSection = document.getElementById("simple-search-section");
     if (simpleSection) {
       simpleSection.classList.remove("hidden");
     }
 
-    // Clear old results
     const simpleContainer = document.getElementById("search-results-simple");
     if (!simpleContainer) return;
     simpleContainer.innerHTML = "";
 
-    if (results.length === 0) {
+    if (!results.length) {
       simpleContainer.innerHTML = "<p>No movies found.</p>";
       return;
     }
@@ -127,7 +121,6 @@ async function advancedSearch() {
       return;
     }
 
-    // display in a grid
     const grid = document.createElement("div");
     grid.style.display = "flex";
     grid.style.flexWrap = "wrap";
@@ -164,8 +157,10 @@ async function advancedSearch() {
  * TRENDING
  **********************************************/
 async function fetchTrendingMovies() {
+  console.log("fetchTrendingMovies() called...");
   try {
     const resp = await fetch("/api/trending");
+    console.log("fetchTrendingMovies() status:", resp.status); // Log the response code
     if (!resp.ok) throw new Error("Trending fetch error");
     const data = await resp.json();
     const trending = data.results || [];
@@ -204,6 +199,7 @@ async function fetchTrendingMovies() {
       flex.appendChild(div);
     });
     container.appendChild(flex);
+    console.log("fetchTrendingMovies() success, loaded", trending.length, "movies");
   } catch (err) {
     console.error("fetchTrendingMovies() error:", err);
     const c = document.getElementById("trending-results");
@@ -235,20 +231,14 @@ async function fetchMovieDetails(movieId) {
   }
 }
 
-/**
- * Populates #detail-section with data and shows it
- * Adds star rating UI + Submit Rating if you want to store the user's rating in watchlist
- */
 function updateMovieUI(data) {
   if (!data) {
     console.warn("No data to display in detail UI");
     return;
   }
-  // Unhide the detail section
   const detailSection = document.getElementById("detail-section");
   if (detailSection) detailSection.classList.remove("hidden");
 
-  // Fill each field
   const posterEl = document.getElementById("detail-poster");
   if (posterEl) {
     posterEl.src = data["Poster URL"] || "https://via.placeholder.com/500x750?text=No+Image";
@@ -277,7 +267,7 @@ function updateMovieUI(data) {
 
   const castEl = document.getElementById("detail-cast");
   if (castEl) {
-    if (data.Cast && data.Cast.length > 0) {
+    if (data.Cast && data.Cast.length) {
       let castHtml = "<strong>Cast:</strong><ul>";
       data.Cast.forEach(c => {
         castHtml += `<li>${c.name} as ${c.character}</li>`;
@@ -311,7 +301,6 @@ async function addToWatchlist(movieId) {
     });
     const result = await resp.json();
     alert(result.message);
-    loadWatchlist();
   } catch (err) {
     console.error("Error adding to watchlist:", err);
   }
@@ -337,7 +326,6 @@ async function loadWatchlist() {
     const resp = await fetch("/api/watchlist");
     if (!resp.ok) throw new Error("Watchlist fetch error");
     const data = await resp.json();
-
     const container = document.getElementById("watchlist-container");
     if (!container) return;
     container.innerHTML = "";
@@ -347,7 +335,6 @@ async function loadWatchlist() {
       if (!detailResp.ok) continue;
       const detailData = await detailResp.json();
 
-      // For each watchlist movie, show Poster, Title, Release, TMDb Rating, and the user's rating
       const div = document.createElement("div");
       div.style.display = "flex";
       div.style.alignItems = "center";
@@ -405,13 +392,14 @@ function updateFavouriteButton(movieId, isFav) {
 }
 
 /**********************************************
- * CHECK WATCHLIST or FAVOURITE
+ * CHECK WATCHLIST / FAV
  **********************************************/
 async function checkIfInWatchlist(movieId) {
+  // If you want to do something on detail load
   try {
     const resp = await fetch("/api/watchlist");
     if (!resp.ok) throw new Error("Watchlist fetch error");
-    // you can do something if needed
+    // no UI changes needed unless you want
   } catch (err) {
     console.error("checkIfInWatchlist error:", err);
   }
@@ -431,7 +419,7 @@ async function checkIfFavourite(movieId) {
 }
 
 /**********************************************
- * STAR RATING + SUBMIT
+ * STAR RATING
  **********************************************/
 function highlightStars(rating) {
   const stars = document.querySelectorAll(".star");
@@ -439,15 +427,14 @@ function highlightStars(rating) {
     const val = parseInt(star.getAttribute("data-value"));
     star.classList.toggle("selected", val <= rating);
   });
-  selectedRating = rating; // store globally
+  selectedRating = rating;
 }
 
 async function submitRating() {
-  // user must be on a detail page with ?id=...
   const urlParams = new URLSearchParams(window.location.search);
   const movieId = urlParams.get("id");
   if (!movieId || !selectedRating) {
-    alert("Please select a movie (View Details) and choose a star rating before submitting.");
+    alert("Select a movie (View Details) and pick a star rating first.");
     return;
   }
   try {
@@ -459,7 +446,6 @@ async function submitRating() {
     const data = await resp.json();
     if (resp.ok) {
       alert(`Rating updated: ${selectedRating}/5`);
-      // Optionally refresh watchlist to see updated rating
       loadWatchlist();
     } else {
       alert(`Error: ${data.error || data.message}`);
