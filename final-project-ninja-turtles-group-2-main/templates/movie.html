@@ -2,137 +2,190 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>CineMate - Movie Details</title>
+  <title>CineMate - Movies, TV, and More</title>
   <style>
-    /* Basic page styling */
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      background-color: #f8f9fa;
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background-color: #f8f9fa; color: #333; }
+    a { color: inherit; text-decoration: none; }
+
+    .top-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      background-color: #0d253f; padding: 10px 20px;
     }
-    h1, h2, h3 {
-      margin-top: 1.2em;
-      margin-bottom: 0.5em;
-      color: #343a40;
+    .brand {
+      color: #fff; font-size: 1.5em; font-weight: bold;
     }
-    /* Movie details section */
-    #movie-title {
-      font-size: 1.8em;
-      color: #007bff;
+    .nav-links { display: flex; gap: 20px; }
+    .nav-links a {
+      color: #fff; font-weight: 500; padding: 5px; transition: color 0.2s;
     }
-    #movie-synopsis {
-      max-width: 600px;
+    .nav-links a:hover { color: #90cea1; }
+
+    .hero {
+      position: relative; width: 100%; height: 400px;
+      background: url('https://www.themoviedb.org/t/p/original/2oEyUWF3APyMlneVZmbF3A2YHuw.jpg') center center / cover no-repeat;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #fff;
     }
-    /* Watchlist area */
-    .watchlist-movie {
-      margin-bottom: 20px;
-      border: 1px solid #ccc;
-      padding: 10px;
-      background: #fff;
+    .hero .hero-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); z-index: 1;
     }
-    .favorite {
-      background-color: gold;
-      color: black;
+    .hero-content {
+      z-index: 2; max-width: 600px; padding: 20px;
     }
-    /* Rating stars */
+    .hero-content h1 { font-size: 2.5em; margin-bottom: 10px; }
+    .hero-content p { font-size: 1.2em; margin-bottom: 20px; }
+    .hero-search {
+      display: flex; justify-content: center; margin: 0 auto; width: 100%; max-width: 500px;
+    }
+    .hero-search input {
+      flex: 1; padding: 10px; font-size: 1em; border: none; border-radius: 4px 0 0 4px; outline: none;
+    }
+    .hero-search button {
+      padding: 10px 20px; font-size: 1em; border: none; border-radius: 0 4px 4px 0;
+      background-color: #90cea1; color: #0d253f; font-weight: 600; cursor: pointer;
+    }
+    .hero-search button:hover { background-color: #53db9b; }
+
+    .container {
+      max-width: 1200px; margin: 20px auto; padding: 0 20px;
+    }
+    .section-box {
+      background: #fff; border: 1px solid #ccc;
+      padding: 15px; margin-bottom: 20px; border-radius: 4px;
+    }
+    .section-box h2 {
+      margin-bottom: 10px; font-size: 1.3em; color: #0d253f;
+    }
+
+    .hidden { display: none !important; }
+
+    .trending-grid {
+      display: flex; flex-wrap: wrap; gap: 10px;
+    }
+
+    /* Example star rating styling */
     .star {
-      font-size: 24px;
-      cursor: pointer;
-      color: gray;
-      margin: 0 2px;
-      user-select: none;
+      font-size: 24px; color: gray; cursor: pointer; margin-right: 5px;
     }
     .star.selected {
       color: gold;
     }
-    /* Trending movies scroller */
-    #trending-results {
-      overflow-x: auto;
-      white-space: nowrap;
-      padding: 10px;
-      border: 1px solid #ccc;
-      background: #fff;
-    }
-    .trending-item {
-      display: inline-block;
-      vertical-align: top;
-      width: 150px;
-      margin-right: 10px;
-      text-align: center;
-      border: 1px solid #e3e3e3;
-      background: #fefefe;
-      padding: 5px;
-    }
-    /* Search results */
-    .search-result-item {
-      margin-bottom: 15px;
-      background: #fff;
-      border: 1px solid #ccc;
-      padding: 10px;
-    }
-    /* Buttons */
-    button {
-      margin: 5px 0;
-      padding: 6px 12px;
-      background-color: #007bff;
-      color: #fff;
-      border: none;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #0056b3;
-    }
-    /* Rating message */
-    #rating-message {
-      color: green;
-      font-weight: bold;
-      margin-top: 10px;
+
+    footer {
+      background-color: #0d253f; color: #fff;
+      text-align: center; padding: 10px; margin-top: 40px;
     }
   </style>
 </head>
 <body>
 
-  <!-- Movie Details Section -->
-  <h1 id="movie-title">Movie Title</h1>
-  <p id="movie-synopsis">Movie Synopsis</p>
-  <p id="release-date">Release Date</p>
-  <p id="movie-rating">Rating</p>
-  <img 
-    id="movie-poster" 
-    src="https://via.placeholder.com/500x750?text=No+Image" 
-    alt="Movie Poster"
-  >
-  <div id="watchlist-buttons"></div>
-  <button id="favorite-button" onclick="toggleFavourite()">☆ Mark as Favourite</button>
-
-  <!-- Rating Stars -->
-  <h3>Rate this Movie</h3>
-  <div id="star-rating">
-    <span class="star" data-value="1">★</span>
-    <span class="star" data-value="2">★</span>
-    <span class="star" data-value="3">★</span>
-    <span class="star" data-value="4">★</span>
-    <span class="star" data-value="5">★</span>
+  <!-- Top Nav -->
+  <div class="top-nav">
+    <div class="brand">CineMate</div>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="#" onclick="document.getElementById('advanced-search').classList.toggle('hidden');">Advanced Search</a>
+      <a href="#" onclick="document.getElementById('watchlist-section').classList.toggle('hidden');">My Watchlist</a>
+    </div>
   </div>
-  <button onclick="submitRating()">Submit Rating</button>
-  <p id="rating-message" style="display: none;"></p>
 
-  <!-- Search Movies Section -->
-  <h2>Search Movies</h2>
-  <input type="text" id="movie-name-input" placeholder="Enter Movie Name">
-  <button onclick="searchMovies()">Search</button>
-  <div id="search-results"></div>
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <h1>Welcome.</h1>
+      <p>Millions of movies, TV shows, and people to discover. Explore now.</p>
+      <div class="hero-search">
+        <input type="text" id="movie-name-input" placeholder="Search for a movie, tv show, person...">
+        <button onclick="searchMovies()">Search</button>
+      </div>
+    </div>
+  </div>
 
-  <!-- Trending Movies Section (Horizontal Scroller) -->
-  <h2>Trending Movies</h2>
-  <div id="trending-results"></div>
+  <div class="container">
 
-  <!-- Watchlist Section -->
-  <h2>Your Watchlist</h2>
-  <div id="watchlist-container"></div>
+    <!-- Simple Search Results -->
+    <div id="simple-search-section" class="section-box hidden">
+      <h2>Search Results</h2>
+      <div id="search-results-simple"></div>
+    </div>
 
-  <!-- JavaScript -->
+    <!-- Movie Detail Section (for "View Details") -->
+    <div id="detail-section" class="section-box hidden">
+      <h2>Movie Details</h2>
+      <div style="display:flex; gap:15px;">
+        <img id="detail-poster" src="" alt="Poster" width="200" style="border:1px solid #ccc;">
+        <div>
+          <h3 id="detail-title"></h3>
+          <p id="detail-release"></p>
+          <p id="detail-rating"></p>
+          <p id="detail-overview"></p>
+          <div id="detail-cast"></div>
+          <div id="detail-trailer"></div>
+
+          <!-- Star Rating for "Your Rating" -->
+          <h4 style="margin-top:15px;">Rate This Movie</h4>
+          <div>
+            <span class="star" data-value="1">★</span>
+            <span class="star" data-value="2">★</span>
+            <span class="star" data-value="3">★</span>
+            <span class="star" data-value="4">★</span>
+            <span class="star" data-value="5">★</span>
+          </div>
+          <button onclick="submitRating()">Submit Rating</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trending -->
+    <div class="section-box">
+      <h2>Trending</h2>
+      <div id="trending-results" class="trending-grid"></div>
+    </div>
+
+    <!-- Advanced Search (collapsible) -->
+    <div id="advanced-search" class="section-box hidden">
+      <h2>Advanced Search &amp; Browse</h2>
+      <p>Refine your search by year, genre, minimum rating, or sorting.</p>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+        <div style="flex: 1; min-width: 120px;">
+          <label for="adv-search-query">Title Keywords:</label>
+          <input id="adv-search-query" type="text" placeholder="e.g. Matrix" style="width:100%;">
+        </div>
+        <div style="flex: 1; min-width: 100px;">
+          <label for="adv-search-year">Year:</label>
+          <input id="adv-search-year" type="text" placeholder="e.g. 1999" style="width:100%;">
+        </div>
+        <div style="flex: 1; min-width: 100px;">
+          <label for="adv-search-genre">Genre (TMDb ID):</label>
+          <input id="adv-search-genre" type="text" placeholder="e.g. 28" style="width:100%;">
+        </div>
+        <div style="flex: 1; min-width: 100px;">
+          <label for="adv-search-minrating">Min Rating:</label>
+          <input id="adv-search-minrating" type="text" placeholder="e.g. 7.0" style="width:100%;">
+        </div>
+        <div style="flex: 1; min-width: 140px;">
+          <label for="adv-search-sort">Sort By:</label>
+          <input id="adv-search-sort" type="text" placeholder="e.g. popularity.desc" style="width:100%;">
+        </div>
+      </div>
+      <button onclick="advancedSearch()">Advanced Search</button>
+      <div id="search-results-adv" style="margin-top:15px;"></div>
+    </div>
+
+    <!-- My Watchlist (hidden) -->
+    <div id="watchlist-section" class="section-box hidden">
+      <h2>My Watchlist</h2>
+      <div id="watchlist-container"></div>
+    </div>
+
+  </div>
+
+  <footer>
+    &copy; 2025 CineMate. All rights reserved.
+  </footer>
+
   <script src="{{ url_for('static', filename='js/movie-details.js') }}" defer></script>
 </body>
 </html>

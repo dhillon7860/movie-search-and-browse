@@ -1,16 +1,14 @@
-import sqlite3          # For connecting to our local SQLite database
-import requests         # For making requests to TMDB
-import time             # For caching (timestamp checks)
+import sqlite3
+import requests
+import time
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
-CORS(app)  # Allow cross-origin requests
+CORS(app)
 
-# Your TMDB API key
 TMDB_API_KEY = "05886b0a875a5f5f5258bef80f28dd71"
 
-# Simple in-memory cache for trending movies
 TRENDING_CACHE_DURATION = 60 * 5  # 5 minutes
 trending_cache = {
     "data": None,
@@ -18,13 +16,9 @@ trending_cache = {
 }
 
 def init_db():
-    """
-    Ensures the 'watchlist' table exists and movie_id is unique (prevent duplicates).
-    We also store a 'rating' column so users can rate their watchlist movies.
-    """
     conn = sqlite3.connect("watchlist.db")
-    cursor = conn.cursor()
-    cursor.execute("""
+    c = conn.cursor()
+    c.execute("""
         CREATE TABLE IF NOT EXISTS watchlist (
             movie_id INTEGER PRIMARY KEY,
             favourite INTEGER DEFAULT 0,
@@ -34,177 +28,222 @@ def init_db():
     conn.commit()
     conn.close()
 
-def get_db_connection():
-    """
-    Opens a connection to the local 'watchlist.db' file.
-    """
-    conn = sqlite3.connect("watchlist.db")
-    conn.row_factory = sqlite3.Row
-    return conn
+@app.route('/')
+def home():
+    return render_template("movie.html")
+
+@app.route('/api/search', methods=['GET'])
+def search_movies():
+    base_url_search = "https://api.themoviedb.org/3/search/movie"
+    base_url_discover = "https://api.themoviedb.org/3/discover/movie"
+
+    q = request.args.get("query")
+    year = request.args.get("year")
+    genre = request.args.get("genre")
+    min_rating = request.args.get("minRating")
+    sort = request.args.get("sort")
+
+    tmdb_params = {
+        "api_key": TMDB_API_KEY,
+        "language": "en-US",
+        "include_adult": "false"
+    }
+
+    if q:
+        tmdb_params["query"] = q
+        resp = requests.get(base_url_search, params=tmdb_params)
+    else:
+        if year:
+            tmdb_params["primary_release_year"] = year
+        if genre:
+            tmdb_params["with_genres"] = genre
+        if min_rating:
+            tmdb_params["vote_average.gte"] = min_rating
+        if sort:
+            tmdb_params["sort_by"] = sort
+        resp = requests.get(base_url_discover, params=tmdb_params)
+
+    if resp.status_code == 200:
+        data = resp.json().get("results", [])
+        formatted_results = []
+        for movie in data:
+            formatted_results.append({
+                "id": movie["id"],
+                "title": movie.get("title", "N/A"),
+                "overview": movie.get("overview", "No synopsis available"),
+                "release_date": movie.get("release_date", "Unknown"),
+                "rating": movie.get("vote_average", "N/A"),
+                "poster_url": (
+                    f"https://image.tmdb.org/t/p/w500{movie.get('poster_path')}"
+                    if movie.get("poster_path")
+                    else "https://via.placeholder.com/500x750?text=No+Image"
+                )
+            })
+        return jsonify({"results": formatted_results})
+    else:
+        return jsonify({"error": "Failed to fetch search results"}), 500
+
+@app.route('/api/trending', methods=['GET'])
+def get_trending_movies():
+    now = time.time()
+    if trending_cache["data"] and (now - trending_cache["timestamp"] < TRENDING_CACHE_DURATION):
+        print("Serving trending movies from cache...")
+        return jsonify({"results": trending_cache["data"]})
+
+    url = f"https://api.themoviedb.org/3/trending/movie/day?api_key={TMDB_API_KEY}"
+    resp = requests.get(url)
+    if resp.status_code == 200:
+        data = resp.json().get("results", [])
+        formatted = []
+        for m in data:
+            formatted.append({
+                "id": m["id"],
+                "title": m.get("title", "N/A"),
+                "overview": m.get("overview", "No synopsis available"),
+                "release_date": m.get("release_date", "Unknown"),
+                "rating": m.get("vote_average", "N/A"),
+                "poster_url": (
+                    f"https://image.tmdb.org/t/p/w500{m.get('poster_path')}"
+                    if m.get("poster_path")
+                    else "https://via.placeholder.com/500x750?text=No+Image"
+                )
+            })
+        trending_cache["data"] = formatted
+        trending_cache["timestamp"] = now
+        print("Fetched trending movies from TMDB and cached the result.")
+        return jsonify({"results": formatted})
+    return jsonify({"error": "Failed to fetch trending movies"}), 500
 
 @app.route('/api/movie/<int:movie_id>', methods=['GET'])
 def get_movie_details(movie_id):
-    """
-    Retrieves detailed information about a movie from TMDB using the provided numeric ID.
-    Returns JSON with fields like title, overview, release date, rating, and poster URL.
-    """
-    tmdb_url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
+    base_url = "https://api.themoviedb.org/3"
+    params = {"api_key": TMDB_API_KEY, "language": "en-US"}
+
     try:
-        response = requests.get(tmdb_url)
-        response.raise_for_status()  # Raises HTTPError if 4xx or 5xx
-        movie_data = response.json()
+        resp_main = requests.get(f"{base_url}/movie/{movie_id}", params=params)
+        resp_main.raise_for_status()
+        main_data = resp_main.json()
+
+        resp_credits = requests.get(f"{base_url}/movie/{movie_id}/credits", params=params)
+        resp_credits.raise_for_status()
+        credits_data = resp_credits.json()
+        cast_info = []
+        if "cast" in credits_data:
+            for c in credits_data["cast"][:5]:
+                cast_info.append({
+                    "name": c.get("name", "Unknown"),
+                    "character": c.get("character", "")
+                })
+
+        resp_videos = requests.get(f"{base_url}/movie/{movie_id}/videos", params=params)
+        resp_videos.raise_for_status()
+        videos_data = resp_videos.json()
+        trailer_url = None
+        for vid in videos_data.get("results", []):
+            if vid.get("site") == "YouTube" and "trailer" in vid.get("type", "").lower():
+                trailer_url = f"https://www.youtube.com/watch?v={vid['key']}"
+                break
+
         return jsonify({
-            "Title": movie_data.get("title", "N/A"),
-            "Overview": movie_data.get("overview", "No synopsis available"),
-            "Release Date": movie_data.get("release_date", "Unknown"),
-            "Rating": movie_data.get("vote_average", "N/A"),
+            "Title": main_data.get("title", "N/A"),
+            "Overview": main_data.get("overview", "No synopsis available"),
+            "Release Date": main_data.get("release_date", "Unknown"),
+            "Rating": main_data.get("vote_average", "N/A"),
             "Poster URL": (
-                f"https://image.tmdb.org/t/p/w500{movie_data.get('poster_path')}"
-                if movie_data.get("poster_path")
+                f"https://image.tmdb.org/t/p/w500{main_data.get('poster_path')}"
+                if main_data.get("poster_path")
                 else "https://via.placeholder.com/500x750?text=No+Image"
-            )
+            ),
+            "Cast": cast_info,
+            "Trailer": trailer_url
         })
+
     except requests.exceptions.HTTPError as http_err:
         if http_err.response.status_code == 404:
             return jsonify({"error": f"Movie with ID {movie_id} not found on TMDB"}), 404
         else:
             return jsonify({"error": f"TMDB HTTP error: {str(http_err)}"}), http_err.response.status_code
     except requests.exceptions.RequestException as e:
-        print(f"API Error: {e}")
+        print("API Error:", e)
         return jsonify({"error": "Failed to fetch movie details"}), 500
 
-@app.route('/api/search', methods=['GET'])
-def search_movies():
-    """
-    Searches TMDB for movies that match the 'query' param.
-    Returns a JSON list of matching movies with basic info.
-    """
-    query = request.args.get("query")
-    if not query:
-        return jsonify({"error": "Query parameter is required"}), 400
-
-    tmdb_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={query}"
-    response = requests.get(tmdb_url)
-
-    if response.status_code == 200:
-        search_results = response.json().get("results", [])
-        formatted_results = [
-            {
-                "id": movie["id"],
-                "title": movie.get("title", "N/A"),
-                "overview": movie.get("overview", "No synopsis available"),
-                "release_date": movie.get("release_date", "Unknown"),
-                "rating": movie.get("vote_average", "N/A"),
+@app.route('/api/movie/<int:movie_id>/recommendations', methods=['GET'])
+def get_movie_recommendations(movie_id):
+    base_url = "https://api.themoviedb.org/3"
+    params = {"api_key": TMDB_API_KEY, "language": "en-US"}
+    try:
+        resp = requests.get(f"{base_url}/movie/{movie_id}/recommendations", params=params)
+        resp.raise_for_status()
+        rec_data = resp.json().get("results", [])
+        rec_list = []
+        for r in rec_data[:10]:
+            rec_list.append({
+                "id": r["id"],
+                "title": r.get("title", "N/A"),
+                "overview": r.get("overview", "No synopsis available"),
+                "release_date": r.get("release_date", "Unknown"),
+                "rating": r.get("vote_average", "N/A"),
                 "poster_url": (
-                    f"https://image.tmdb.org/t/p/w500{movie['poster_path']}"
-                    if movie.get("poster_path")
+                    f"https://image.tmdb.org/t/p/w500{r.get('poster_path')}"
+                    if r.get("poster_path")
                     else "https://via.placeholder.com/500x750?text=No+Image"
                 )
-            }
-            for movie in search_results
-        ]
-        return jsonify({"results": formatted_results})
-
-    return jsonify({"error": "Failed to fetch search results"}), 500
-
-@app.route('/api/trending', methods=['GET'])
-def get_trending_movies():
-    """
-    Fetches trending movies from TMDB using /trending/movie/day.
-    Caches results in memory for 5 minutes to improve performance.
-    """
-    current_time = time.time()
-    if (trending_cache["data"] is not None and
-        (current_time - trending_cache["timestamp"]) < TRENDING_CACHE_DURATION):
-        print("Serving trending movies from cache...")
-        return jsonify({"results": trending_cache["data"]})
-
-    tmdb_url = f"https://api.themoviedb.org/3/trending/movie/day?api_key={TMDB_API_KEY}"
-    response = requests.get(tmdb_url)
-
-    if response.status_code == 200:
-        trending_results = response.json().get("results", [])
-        formatted_results = [
-            {
-                "id": movie["id"],
-                "title": movie.get("title", "N/A"),
-                "overview": movie.get("overview", "No synopsis available"),
-                "release_date": movie.get("release_date", "Unknown"),
-                "rating": movie.get("vote_average", "N/A"),
-                "poster_url": (
-                    f"https://image.tmdb.org/t/p/w500{movie['poster_path']}"
-                    if movie.get("poster_path")
-                    else "https://via.placeholder.com/500x750?text=No+Image"
-                )
-            }
-            for movie in trending_results
-        ]
-        trending_cache["data"] = formatted_results
-        trending_cache["timestamp"] = current_time
-        print("Fetched trending movies from TMDB and cached the result.")
-        return jsonify({"results": formatted_results})
-    else:
-        return jsonify({"error": "Failed to fetch trending movies"}), 500
+            })
+        return jsonify({"recommendations": rec_list})
+    except requests.exceptions.HTTPError as http_err:
+        if http_err.response.status_code == 404:
+            return jsonify({"error": f"No recommendations found for {movie_id}."}), 404
+        else:
+            return jsonify({"error": f"TMDB HTTP error: {str(http_err)}"}), http_err.response.status_code
+    except requests.exceptions.RequestException as e:
+        print("API Error:", e)
+        return jsonify({"error": "Failed to fetch recommendations"}), 500
 
 @app.route('/api/watchlist', methods=['GET'])
 def get_watchlist():
-    """
-    Returns the list of movies in our watchlist, along with whether each is favorited, plus rating.
-    """
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT movie_id, favourite, rating FROM watchlist")
-    rows = cursor.fetchall()
-    movies = []
-    for row in rows:
-        movies.append({
-            "movie_id": row["movie_id"],
-            "favourite": bool(row["favourite"]),
-            "rating": row["rating"]
-        })
+    conn = sqlite3.connect("watchlist.db")
+    c = conn.cursor()
+    c.execute("SELECT movie_id, favourite, rating FROM watchlist")
+    rows = c.fetchall()
     conn.close()
-    return jsonify({"watchlist": movies})
+
+    watchlist_data = []
+    for row in rows:
+        watchlist_data.append({
+            "movie_id": row[0],
+            "favourite": bool(row[1]),
+            "rating": row[2]
+        })
+    return jsonify({"watchlist": watchlist_data})
 
 @app.route('/api/watchlist', methods=['POST'])
 def add_to_watchlist():
-    """
-    Adds a movie to the watchlist. If it's already present, we don't duplicate it.
-    """
     data = request.json
     movie_id = data.get("movieId")
-
     if not movie_id:
-        return jsonify({"error": "Movie ID is required"}), 400
+        return jsonify({"error": "movieId is required"}), 400
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Check if movie already in watchlist (PRIMARY KEY enforces uniqueness)
+    conn = sqlite3.connect("watchlist.db")
+    c = conn.cursor()
     try:
-        cursor.execute("INSERT INTO watchlist (movie_id) VALUES (?)", (movie_id,))
+        c.execute("INSERT INTO watchlist (movie_id) VALUES (?)", (movie_id,))
         conn.commit()
-        message = f"Movie {movie_id} added to watchlist!"
+        msg = f"Movie {movie_id} added to watchlist!"
     except sqlite3.IntegrityError:
-        # This triggers if we violate the PRIMARY KEY constraint
-        message = f"Movie {movie_id} is already in the watchlist."
-
+        msg = f"Movie {movie_id} is already in the watchlist."
     conn.close()
-    return jsonify({"message": message})
+    return jsonify({"message": msg})
 
 @app.route('/api/watchlist', methods=['DELETE'])
 def remove_from_watchlist():
-    """
-    Removes a movie from the watchlist if present.
-    """
     data = request.json
     movie_id = data.get("movieId")
-
     if not movie_id:
-        return jsonify({"error": "Movie ID is required"}), 400
+        return jsonify({"error": "movieId is required"}), 400
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM watchlist WHERE movie_id = ?", (movie_id,))
+    conn = sqlite3.connect("watchlist.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM watchlist WHERE movie_id = ?", (movie_id,))
     conn.commit()
     conn.close()
 
@@ -212,40 +251,33 @@ def remove_from_watchlist():
 
 @app.route('/api/watchlist/favourite', methods=['PUT'])
 def toggle_favourite():
-    """
-    Toggles the 'favourite' status for a movie in the watchlist.
-    """
     data = request.json
     movie_id = data.get("movieId")
-
     if not movie_id:
-        return jsonify({"error": "Movie ID is required"}), 400
+        return jsonify({"error": "movieId is required"}), 400
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT favourite FROM watchlist WHERE movie_id = ?", (movie_id,))
-    result = cursor.fetchone()
-
-    if result is None:
+    conn = sqlite3.connect("watchlist.db")
+    c = conn.cursor()
+    c.execute("SELECT favourite FROM watchlist WHERE movie_id = ?", (movie_id,))
+    row = c.fetchone()
+    if not row:
         conn.close()
         return jsonify({"error": "Movie not found in watchlist"}), 404
 
-    new_status = 1 if result["favourite"] == 0 else 0
-    cursor.execute("UPDATE watchlist SET favourite = ? WHERE movie_id = ?", (new_status, movie_id))
+    current_fav = row[0]
+    new_status = 1 if current_fav == 0 else 0
+    c.execute("UPDATE watchlist SET favourite = ? WHERE movie_id = ?", (new_status, movie_id))
     conn.commit()
     conn.close()
 
-    action_msg = "marked as favourite" if new_status else "removed from favourites"
+    msg = "marked as favourite" if new_status else "removed from favourites"
     return jsonify({
-        "message": f"Movie {movie_id} {action_msg}!",
+        "message": f"Movie {movie_id} {msg}!",
         "favourite": bool(new_status)
     })
 
 @app.route('/api/watchlist/rating', methods=['PUT'])
 def update_movie_rating():
-    """
-    Updates the rating for a movie in the watchlist.
-    """
     data = request.json
     movie_id = data.get("movieId")
     rating = data.get("rating")
@@ -253,15 +285,15 @@ def update_movie_rating():
     if movie_id is None or rating is None:
         return jsonify({"error": "movieId and rating are required"}), 400
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT movie_id FROM watchlist WHERE movie_id = ?", (movie_id,))
-    result = cursor.fetchone()
-    if result is None:
+    conn = sqlite3.connect("watchlist.db")
+    c = conn.cursor()
+    c.execute("SELECT movie_id FROM watchlist WHERE movie_id = ?", (movie_id,))
+    row = c.fetchone()
+    if not row:
         conn.close()
         return jsonify({"error": "Movie not found in watchlist"}), 404
 
-    cursor.execute("UPDATE watchlist SET rating = ? WHERE movie_id = ?", (rating, movie_id))
+    c.execute("UPDATE watchlist SET rating = ? WHERE movie_id = ?", (rating, movie_id))
     conn.commit()
     conn.close()
 
@@ -270,19 +302,9 @@ def update_movie_rating():
         "rating": rating
     })
 
-@app.route('/')
-def home():
-    """
-    Renders our main HTML page (movie.html).
-    """
-    return render_template("movie.html")
-
 if __name__ == '__main__':
-    # Initialize DB so duplicates are prevented by PRIMARY KEY
     init_db()
-
     print("Registered Flask Routes:")
     for rule in app.url_map.iter_rules():
         print(f"{rule} -> {rule.methods}")
-
     app.run(debug=True)

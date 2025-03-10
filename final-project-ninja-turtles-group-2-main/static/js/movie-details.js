@@ -2,345 +2,469 @@
 
 let selectedRating = 0;
 
-// On page load, show trending movies right away, check URL for ?id=<movieID>, and load watchlist.
 document.addEventListener("DOMContentLoaded", function () {
-    fetchTrendingMovies(); // Display trending movies on homepage automatically
+  // Load trending
+  fetchTrendingMovies();
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const movieId = urlParams.get("id");
-    if (movieId) {
-        fetchMovieDetails(movieId);
-    }
+  // If there's ?id in the URL, show that movie's details
+  const urlParams = new URLSearchParams(window.location.search);
+  const movieId = urlParams.get("id");
+  if (movieId) {
+    fetchMovieDetails(movieId);
+  }
 
-    // Load the watchlist on page load
-    loadWatchlist();
+  // Load watchlist
+  loadWatchlist();
+
+  // Setup star rating clicks for detail section
+  const stars = document.querySelectorAll(".star");
+  stars.forEach(star => {
+    star.addEventListener("click", () => {
+      const val = parseInt(star.getAttribute("data-value"));
+      highlightStars(val);
+      selectedRating = val;
+    });
+  });
 });
 
-// Fetch detailed information about a movie from the server and update the UI
-async function fetchMovieDetails(movieId) {
-    const apiUrl = `/api/movie/${movieId}`;
-
-    try {
-        const response = await fetch(apiUrl);
-        if (!response.ok) {
-            console.warn(`Movie ID ${movieId} not found or invalid.`);
-            updateMovieUI(null);
-            return;
-        }
-        const data = await response.json();
-        updateMovieUI(data);
-
-        // Check watchlist + favourite status
-        checkIfInWatchlist(movieId);
-        checkIfFavourite(movieId);
-    } catch (error) {
-        console.error("Error fetching movie details:", error);
-        updateMovieUI(null);
-    }
-}
-
-// Update the HTML elements on the page to reflect current movie details
-function updateMovieUI(data) {
-    if (!data) {
-        document.getElementById("movie-title").innerText = "Movie Not Found";
-        document.getElementById("movie-synopsis").innerText = "Try searching for another movie.";
-        document.getElementById("release-date").innerText = "";
-        document.getElementById("movie-rating").innerText = "";
-        document.getElementById("movie-poster").src = "https://via.placeholder.com/500x750?text=No+Image";
-        return;
-    }
-
-    document.getElementById("movie-title").innerText = data.Title || "Title not available";
-    document.getElementById("movie-synopsis").innerText = data.Overview || "No synopsis available";
-    document.getElementById("release-date").innerText = `Released: ${data["Release Date"]}`;
-    document.getElementById("movie-rating").innerText = `Rating: ${data.Rating}`;
-
-    const poster = document.getElementById("movie-poster");
-    poster.src = data["Poster URL"] || "https://via.placeholder.com/500x750?text=No+Image";
-    poster.alt = data.Title;
-}
-
-// Search for movies by title (query) and display the results
+/**********************************************
+ * SIMPLE SEARCH
+ **********************************************/
 async function searchMovies() {
-    const query = document.getElementById("movie-name-input").value.trim();
-    if (!query) {
-        alert("Please enter a movie name!");
-        return;
+  const queryInput = document.getElementById("movie-name-input");
+  if (!queryInput) {
+    alert("No search input found.");
+    return;
+  }
+  const query = queryInput.value.trim();
+  if (!query) {
+    alert("Please enter a movie name!");
+    return;
+  }
+
+  try {
+    const resp = await fetch(`/api/search?query=${encodeURIComponent(query)}`);
+    if (!resp.ok) throw new Error("Search fetch error");
+
+    const data = await resp.json();
+    const results = data.results || [];
+
+    // Unhide the #simple-search-section
+    const simpleSection = document.getElementById("simple-search-section");
+    if (simpleSection) {
+      simpleSection.classList.remove("hidden");
     }
 
-    try {
-        const response = await fetch(`/api/search?query=${encodeURIComponent(query)}`);
-        if (!response.ok) throw new Error("Failed to fetch search results");
+    // Clear old results
+    const simpleContainer = document.getElementById("search-results-simple");
+    if (!simpleContainer) return;
+    simpleContainer.innerHTML = "";
 
-        const data = await response.json();
-        const resultsContainer = document.getElementById("search-results");
-        resultsContainer.innerHTML = "";
-
-        if (!data.results || data.results.length === 0) {
-            resultsContainer.innerHTML = "<p>No movies found. Try a different search term.</p>";
-            return;
-        }
-
-        data.results.forEach(movie => {
-            const movieDiv = document.createElement("div");
-            movieDiv.classList.add("search-result-item");
-            movieDiv.innerHTML = `
-                <strong>${movie.title} (${movie.release_date || "Unknown"})</strong><br>
-                Rating: ${movie.rating}<br>
-                <img src="${movie.poster_url}" alt="${movie.title}" width="100"><br>
-                <button onclick="window.location.href='/?id=${movie.id}'">View Details</button>
-                <button onclick="addToWatchlist(${movie.id})">Add to Watchlist</button>
-            `;
-            resultsContainer.appendChild(movieDiv);
-        });
-    } catch (error) {
-        console.error("Error searching for movies:", error);
-        document.getElementById("search-results").innerHTML = "<p>Failed to fetch search results.</p>";
+    if (results.length === 0) {
+      simpleContainer.innerHTML = "<p>No movies found.</p>";
+      return;
     }
+
+    const grid = document.createElement("div");
+    grid.style.display = "flex";
+    grid.style.flexWrap = "wrap";
+    grid.style.gap = "10px";
+
+    results.forEach(movie => {
+      const div = document.createElement("div");
+      div.style.width = "150px";
+      div.style.border = "1px solid #ccc";
+      div.style.borderRadius = "4px";
+      div.style.overflow = "hidden";
+      div.style.textAlign = "center";
+      div.innerHTML = `
+        <img src="${movie.poster_url}" alt="${movie.title}" width="150">
+        <div style="padding:5px;">
+          <strong>${movie.title}</strong><br>
+          (${movie.release_date || "Unknown"})<br>
+          Rating: ${movie.rating}<br><br>
+          <button onclick="window.location.href='/?id=${movie.id}'">View Details</button>
+          <button onclick="addToWatchlist(${movie.id})">Add to Watchlist</button>
+        </div>
+      `;
+      grid.appendChild(div);
+    });
+    simpleContainer.appendChild(grid);
+  } catch (err) {
+    console.error("searchMovies() error:", err);
+    const c = document.getElementById("search-results-simple");
+    if (c) c.innerHTML = "<p>Failed to fetch search results.</p>";
+  }
 }
 
-// Fetch trending movies from our `/api/trending` endpoint
+/**********************************************
+ * ADVANCED SEARCH
+ **********************************************/
+async function advancedSearch() {
+  const q = document.getElementById("adv-search-query")?.value.trim();
+  const year = document.getElementById("adv-search-year")?.value.trim();
+  const genre = document.getElementById("adv-search-genre")?.value.trim();
+  const minRating = document.getElementById("adv-search-minrating")?.value.trim();
+  const sort = document.getElementById("adv-search-sort")?.value.trim();
+
+  let url = "/api/search?";
+  if (q) url += `query=${encodeURIComponent(q)}&`;
+  if (year) url += `year=${encodeURIComponent(year)}&`;
+  if (genre) url += `genre=${encodeURIComponent(genre)}&`;
+  if (minRating) url += `minRating=${encodeURIComponent(minRating)}&`;
+  if (sort) url += `sort=${encodeURIComponent(sort)}`;
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("Advanced search fetch error");
+    const data = await resp.json();
+    const advContainer = document.getElementById("search-results-adv");
+    if (!advContainer) return;
+    advContainer.innerHTML = "";
+
+    if (!data.results || data.results.length === 0) {
+      advContainer.innerHTML = "<p>No movies found with the given criteria.</p>";
+      return;
+    }
+
+    // display in a grid
+    const grid = document.createElement("div");
+    grid.style.display = "flex";
+    grid.style.flexWrap = "wrap";
+    grid.style.gap = "10px";
+
+    data.results.forEach(movie => {
+      const div = document.createElement("div");
+      div.style.width = "150px";
+      div.style.border = "1px solid #ccc";
+      div.style.borderRadius = "4px";
+      div.style.overflow = "hidden";
+      div.style.textAlign = "center";
+      div.innerHTML = `
+        <img src="${movie.poster_url}" alt="${movie.title}" width="150">
+        <div style="padding:5px;">
+          <strong>${movie.title}</strong><br>
+          (${movie.release_date || "Unknown"})<br>
+          Rating: ${movie.rating}<br><br>
+          <button onclick="window.location.href='/?id=${movie.id}'">View Details</button>
+          <button onclick="addToWatchlist(${movie.id})">Add to Watchlist</button>
+        </div>
+      `;
+      grid.appendChild(div);
+    });
+    advContainer.appendChild(grid);
+  } catch (err) {
+    console.error("advancedSearch() error:", err);
+    const c = document.getElementById("search-results-adv");
+    if (c) c.innerHTML = "<p>Failed advanced search.</p>";
+  }
+}
+
+/**********************************************
+ * TRENDING
+ **********************************************/
 async function fetchTrendingMovies() {
-    try {
-        const response = await fetch('/api/trending');
-        if (!response.ok) throw new Error("Failed to fetch trending movies");
+  try {
+    const resp = await fetch("/api/trending");
+    if (!resp.ok) throw new Error("Trending fetch error");
+    const data = await resp.json();
+    const trending = data.results || [];
 
-        const data = await response.json();
-        const trendingMovies = data.results || [];
-        const trendingContainer = document.getElementById("trending-results");
-        trendingContainer.innerHTML = "";
+    const container = document.getElementById("trending-results");
+    if (!container) return;
+    container.innerHTML = "";
 
-        if (trendingMovies.length === 0) {
-            trendingContainer.innerHTML = "<p>No trending movies found.</p>";
-            return;
-        }
-
-        trendingMovies.forEach(movie => {
-            const movieDiv = document.createElement("div");
-            movieDiv.classList.add("trending-item");
-            movieDiv.innerHTML = `
-                <img src="${movie.poster_url}" alt="${movie.title}" width="120"><br>
-                <strong>${movie.title}</strong> (${movie.release_date || "Unknown"})<br>
-                Rating: ${movie.rating}<br>
-                <button onclick="window.location.href='/?id=${movie.id}'">View Details</button>
-                <button onclick="addToWatchlist(${movie.id})">Add to Watchlist</button>
-            `;
-            trendingContainer.appendChild(movieDiv);
-        });
-    } catch (error) {
-        console.error("Error fetching trending movies:", error);
-        document.getElementById("trending-results").innerHTML = "<p>Failed to fetch trending movies.</p>";
+    if (!trending.length) {
+      container.innerHTML = "<p>No trending movies found.</p>";
+      return;
     }
+
+    const flex = document.createElement("div");
+    flex.style.display = "flex";
+    flex.style.flexWrap = "wrap";
+    flex.style.gap = "10px";
+
+    trending.forEach(m => {
+      const div = document.createElement("div");
+      div.style.width = "150px";
+      div.style.border = "1px solid #ccc";
+      div.style.borderRadius = "4px";
+      div.style.overflow = "hidden";
+      div.style.textAlign = "center";
+      div.innerHTML = `
+        <img src="${m.poster_url}" alt="${m.title}" width="150">
+        <div style="padding:5px;">
+          <strong>${m.title}</strong><br>
+          (${m.release_date || "Unknown"})<br>
+          Rating: ${m.rating}<br><br>
+          <button onclick="window.location.href='/?id=${m.id}'">View Details</button>
+          <button onclick="addToWatchlist(${m.id})">Add to Watchlist</button>
+        </div>
+      `;
+      flex.appendChild(div);
+    });
+    container.appendChild(flex);
+  } catch (err) {
+    console.error("fetchTrendingMovies() error:", err);
+    const c = document.getElementById("trending-results");
+    if (c) {
+      c.innerHTML = "<p>Failed to load trending movies.</p>";
+    }
+  }
 }
 
-// Add a movie to the watchlist
+/**********************************************
+ * MOVIE DETAILS
+ **********************************************/
+async function fetchMovieDetails(movieId) {
+  try {
+    const resp = await fetch(`/api/movie/${movieId}`);
+    if (!resp.ok) {
+      console.warn(`Movie with ID ${movieId} not found or invalid.`);
+      updateMovieUI(null);
+      return;
+    }
+    const data = await resp.json();
+    updateMovieUI(data);
+
+    checkIfInWatchlist(movieId);
+    checkIfFavourite(movieId);
+  } catch (err) {
+    console.error("Error fetching movie details:", err);
+    updateMovieUI(null);
+  }
+}
+
+/**
+ * Populates #detail-section with data and shows it
+ * Adds star rating UI + Submit Rating if you want to store the user's rating in watchlist
+ */
+function updateMovieUI(data) {
+  if (!data) {
+    console.warn("No data to display in detail UI");
+    return;
+  }
+  // Unhide the detail section
+  const detailSection = document.getElementById("detail-section");
+  if (detailSection) detailSection.classList.remove("hidden");
+
+  // Fill each field
+  const posterEl = document.getElementById("detail-poster");
+  if (posterEl) {
+    posterEl.src = data["Poster URL"] || "https://via.placeholder.com/500x750?text=No+Image";
+    posterEl.alt = data.Title || "Poster";
+  }
+
+  const titleEl = document.getElementById("detail-title");
+  if (titleEl) {
+    titleEl.textContent = data.Title || "No Title";
+  }
+
+  const releaseEl = document.getElementById("detail-release");
+  if (releaseEl) {
+    releaseEl.textContent = `Release Date: ${data["Release Date"] || "Unknown"}`;
+  }
+
+  const ratingEl = document.getElementById("detail-rating");
+  if (ratingEl) {
+    ratingEl.textContent = `TMDb Rating: ${data.Rating || "N/A"}`;
+  }
+
+  const overviewEl = document.getElementById("detail-overview");
+  if (overviewEl) {
+    overviewEl.textContent = data.Overview || "No synopsis available.";
+  }
+
+  const castEl = document.getElementById("detail-cast");
+  if (castEl) {
+    if (data.Cast && data.Cast.length > 0) {
+      let castHtml = "<strong>Cast:</strong><ul>";
+      data.Cast.forEach(c => {
+        castHtml += `<li>${c.name} as ${c.character}</li>`;
+      });
+      castHtml += "</ul>";
+      castEl.innerHTML = castHtml;
+    } else {
+      castEl.innerHTML = "<strong>Cast:</strong> No cast data.";
+    }
+  }
+
+  const trailerEl = document.getElementById("detail-trailer");
+  if (trailerEl) {
+    if (data.Trailer) {
+      trailerEl.innerHTML = `<strong>Trailer:</strong> <a href="${data.Trailer}" target="_blank">Watch on YouTube</a>`;
+    } else {
+      trailerEl.innerHTML = "<strong>Trailer:</strong> No trailer available.";
+    }
+  }
+}
+
+/**********************************************
+ * WATCHLIST
+ **********************************************/
 async function addToWatchlist(movieId) {
-    try {
-        const response = await fetch('/api/watchlist', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ movieId })
-        });
-        const data = await response.json();
-        alert(data.message);
-
-        updateWatchlistButtons(movieId, true);
-        loadWatchlist();
-    } catch (error) {
-        console.error("Error adding to watchlist:", error);
-    }
+  try {
+    const resp = await fetch("/api/watchlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ movieId })
+    });
+    const result = await resp.json();
+    alert(result.message);
+    loadWatchlist();
+  } catch (err) {
+    console.error("Error adding to watchlist:", err);
+  }
 }
 
-// Remove a movie from the watchlist
 async function removeFromWatchlist(movieId) {
-    try {
-        const response = await fetch('/api/watchlist', {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ movieId })
-        });
-        const data = await response.json();
-        alert(data.message);
-
-        updateWatchlistButtons(movieId, false);
-        loadWatchlist();
-    } catch (error) {
-        console.error("Error removing from watchlist:", error);
-    }
-}
-
-// Check if the given movie is in our watchlist
-async function checkIfInWatchlist(movieId) {
-    try {
-        const response = await fetch('/api/watchlist');
-        if (!response.ok) throw new Error("Failed to fetch watchlist");
-
-        const watchlistData = await response.json();
-        const inList = watchlistData.watchlist.some(entry => entry.movie_id === parseInt(movieId));
-
-        updateWatchlistButtons(movieId, inList);
-    } catch (error) {
-        console.error("Error checking watchlist:", error);
-    }
-}
-
-// Toggle the favorite status of a movie in the watchlist
-async function toggleFavourite(movieId) {
-    if (!movieId) {
-        console.error("Invalid Movie ID provided for toggling favorite.");
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/watchlist/favourite', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ movieId })
-        });
-        if (!response.ok) {
-            throw new Error(`API Error: ${response.status} - ${await response.text()}`);
-        }
-
-        const data = await response.json();
-        updateFavouriteButton(movieId, data.favourite);
-    } catch (error) {
-        console.error("Error toggling favorite:", error);
-    }
-}
-
-// Check if the movie is favorited in the watchlist
-async function checkIfFavourite(movieId) {
-    try {
-        const response = await fetch('/api/watchlist');
-        if (!response.ok) throw new Error("Failed to fetch watchlist");
-
-        const watchlistData = await response.json();
-        const movie = watchlistData.watchlist.find(m => m.movie_id == movieId);
-        const isFavourite = movie ? movie.favourite : false;
-
-        updateFavouriteButton(movieId, isFavourite);
-    } catch (error) {
-        console.error("Error checking favorite status:", error);
-    }
-}
-
-// Update the watchlist "Add/Remove" button
-function updateWatchlistButtons(movieId, isInWatchlist) {
-    const watchlistContainer = document.getElementById("watchlist-buttons");
-    watchlistContainer.innerHTML = "";
-
-    const button = document.createElement("button");
-    button.innerText = isInWatchlist ? "Remove from Watchlist" : "Add to Watchlist";
-    button.onclick = isInWatchlist
-        ? () => removeFromWatchlist(movieId)
-        : () => addToWatchlist(movieId);
-
-    watchlistContainer.appendChild(button);
-}
-
-// Update the text of the favorite button
-function updateFavouriteButton(movieId, isFavourite) {
-    let favButton = document.getElementById(`fav-btn-${movieId}`);
-    if (!favButton) {
-        favButton = document.getElementById("favorite-button");
-    }
-    if (!favButton) {
-        console.warn(`Favorite button not found for Movie ID ${movieId}`);
-        return;
-    }
-
-    favButton.innerText = isFavourite ? "Unfavourite" : "Mark as Favourite";
-    favButton.classList.toggle("favorite", isFavourite);
-    favButton.onclick = () => toggleFavourite(movieId);
-}
-
-// Star rating logic
-document.addEventListener("DOMContentLoaded", function () {
-    const stars = document.querySelectorAll(".star");
-    stars.forEach(star => {
-        star.addEventListener("click", function () {
-            const rating = parseInt(this.getAttribute("data-value"));
-            highlightStars(rating);
-            selectedRating = rating;
-        });
+  try {
+    const resp = await fetch("/api/watchlist", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ movieId })
     });
-});
-
-// Highlight stars up to the selected rating
-function highlightStars(rating) {
-    const stars = document.querySelectorAll(".star");
-    stars.forEach(star => {
-        const value = parseInt(star.getAttribute("data-value"));
-        star.classList.toggle("selected", value <= rating);
-    });
+    const result = await resp.json();
+    alert(result.message);
+    loadWatchlist();
+  } catch (err) {
+    console.error("Error removing from watchlist:", err);
+  }
 }
 
-// Send the selected rating to the server
-async function submitRating() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const movieId = urlParams.get("id");
-
-    if (!movieId || !selectedRating) {
-        alert("Please select a movie and a rating before submitting.");
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/watchlist/rating', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ movieId, rating: selectedRating })
-        });
-        const data = await response.json();
-        if (response.ok) {
-            document.getElementById("rating-message").innerText = data.message;
-            document.getElementById("rating-message").style.display = "block";
-        } else {
-            alert(`Error: ${data.error}`);
-        }
-    } catch (error) {
-        console.error("Error submitting rating:", error);
-    }
-}
-
-// Load and display the user's watchlist
 async function loadWatchlist() {
-    try {
-        const response = await fetch('/api/watchlist');
-        if (!response.ok) throw new Error("Failed to fetch watchlist");
+  try {
+    const resp = await fetch("/api/watchlist");
+    if (!resp.ok) throw new Error("Watchlist fetch error");
+    const data = await resp.json();
 
-        const data = await response.json();
-        const watchlist = data.watchlist || [];
+    const container = document.getElementById("watchlist-container");
+    if (!container) return;
+    container.innerHTML = "";
 
-        const watchlistContainer = document.getElementById("watchlist-container");
-        watchlistContainer.innerHTML = "";
+    for (let item of (data.watchlist || [])) {
+      const detailResp = await fetch(`/api/movie/${item.movie_id}`);
+      if (!detailResp.ok) continue;
+      const detailData = await detailResp.json();
 
-        for (let movie of watchlist) {
-            // Fetch details from the /api/movie/<id> route
-            const movieResponse = await fetch(`/api/movie/${movie.movie_id}`);
-            if (movieResponse.ok) {
-                const movieData = await movieResponse.json();
-                const movieDiv = document.createElement("div");
-                movieDiv.classList.add("watchlist-movie");
-                movieDiv.dataset.movieId = movie.movie_id;
-
-                movieDiv.innerHTML = `
-                    <strong>${movieData.Title}</strong> (${movieData["Release Date"]})
-                    <br>TMDb Rating: ${movieData.Rating}<br>
-                    <img src="${movieData["Poster URL"]}" alt="${movieData.Title}" width="100"><br>
-                    <button onclick="removeFromWatchlist(${movie.movie_id})">Remove</button>
-                    <button id="fav-btn-${movie.movie_id}" onclick="toggleFavourite(${movie.movie_id})">
-                        ${movie.favourite ? "Unfavourite" : "Mark as Favourite"}
-                    </button>
-                    <p>Your Rating: ${movie.rating || 0}/5</p>
-                `;
-                watchlistContainer.appendChild(movieDiv);
-
-                // Update the favourite button visually
-                updateFavouriteButton(movie.movie_id, movie.favourite);
-            }
-        }
-    } catch (error) {
-        console.error("Error loading watchlist:", error);
+      // For each watchlist movie, show Poster, Title, Release, TMDb Rating, and the user's rating
+      const div = document.createElement("div");
+      div.style.display = "flex";
+      div.style.alignItems = "center";
+      div.style.gap = "10px";
+      div.style.border = "1px solid #ccc";
+      div.style.borderRadius = "4px";
+      div.style.marginBottom = "10px";
+      div.innerHTML = `
+        <img src="${detailData["Poster URL"]}" alt="${detailData.Title}" style="width:60px;border-radius:4px;">
+        <div>
+          <strong>${detailData.Title}</strong> (${detailData["Release Date"]})<br>
+          TMDb Rating: ${detailData.Rating}
+          <p>Your Rating: ${item.rating || 0}/5</p>
+          <button onclick="removeFromWatchlist(${item.movie_id})">Remove</button>
+          <button id="fav-btn-${item.movie_id}" onclick="toggleFavourite(${item.movie_id})">
+            ${item.favourite ? "Unfavourite" : "Mark as Favourite"}
+          </button>
+        </div>
+      `;
+      container.appendChild(div);
+      updateFavouriteButton(item.movie_id, item.favourite);
     }
+  } catch (err) {
+    console.error("loadWatchlist error:", err);
+  }
+}
+
+/**********************************************
+ * FAVOURITES
+ **********************************************/
+async function toggleFavourite(movieId) {
+  if (!movieId) return;
+  try {
+    const resp = await fetch("/api/watchlist/favourite", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ movieId })
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error(`Fav toggle error: ${resp.status} - ${txt}`);
+    }
+    const data = await resp.json();
+    updateFavouriteButton(movieId, data.favourite);
+  } catch (err) {
+    console.error("toggleFavourite error:", err);
+  }
+}
+
+function updateFavouriteButton(movieId, isFav) {
+  let favBtn = document.getElementById(`fav-btn-${movieId}`);
+  if (!favBtn) return;
+  favBtn.innerText = isFav ? "Unfavourite" : "Mark as Favourite";
+  favBtn.classList.toggle("favorite", isFav);
+}
+
+/**********************************************
+ * CHECK WATCHLIST or FAVOURITE
+ **********************************************/
+async function checkIfInWatchlist(movieId) {
+  try {
+    const resp = await fetch("/api/watchlist");
+    if (!resp.ok) throw new Error("Watchlist fetch error");
+    // you can do something if needed
+  } catch (err) {
+    console.error("checkIfInWatchlist error:", err);
+  }
+}
+
+async function checkIfFavourite(movieId) {
+  try {
+    const resp = await fetch("/api/watchlist");
+    if (!resp.ok) throw new Error("Watchlist fetch error");
+    const data = await resp.json();
+    const item = data.watchlist.find(w => w.movie_id === parseInt(movieId));
+    const isFav = item ? item.favourite : false;
+    updateFavouriteButton(movieId, isFav);
+  } catch (err) {
+    console.error("checkIfFavourite error:", err);
+  }
+}
+
+/**********************************************
+ * STAR RATING + SUBMIT
+ **********************************************/
+function highlightStars(rating) {
+  const stars = document.querySelectorAll(".star");
+  stars.forEach(star => {
+    const val = parseInt(star.getAttribute("data-value"));
+    star.classList.toggle("selected", val <= rating);
+  });
+  selectedRating = rating; // store globally
+}
+
+async function submitRating() {
+  // user must be on a detail page with ?id=...
+  const urlParams = new URLSearchParams(window.location.search);
+  const movieId = urlParams.get("id");
+  if (!movieId || !selectedRating) {
+    alert("Please select a movie (View Details) and choose a star rating before submitting.");
+    return;
+  }
+  try {
+    const resp = await fetch("/api/watchlist/rating", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ movieId, rating: selectedRating })
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      alert(`Rating updated: ${selectedRating}/5`);
+      // Optionally refresh watchlist to see updated rating
+      loadWatchlist();
+    } else {
+      alert(`Error: ${data.error || data.message}`);
+    }
+  } catch (err) {
+    console.error("submitRating error:", err);
+  }
 }
