@@ -17,6 +17,22 @@ trending_cache = {
     "timestamp": 0
 }
 
+def init_db():
+    """
+    Ensures the 'watchlist' table exists and movie_id is unique (prevent duplicates).
+    We also store a 'rating' column so users can rate their watchlist movies.
+    """
+    conn = sqlite3.connect("watchlist.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS watchlist (
+            movie_id INTEGER PRIMARY KEY,
+            favourite INTEGER DEFAULT 0,
+            rating INTEGER DEFAULT 0
+        )
+    """)
+    conn.commit()
+    conn.close()
 
 def get_db_connection():
     """
@@ -30,15 +46,13 @@ def get_db_connection():
 def get_movie_details(movie_id):
     """
     Retrieves detailed information about a movie from TMDB using the provided numeric ID.
-    Returns JSON with fields like title, overview, release date, and poster URL.
+    Returns JSON with fields like title, overview, release date, rating, and poster URL.
     """
     tmdb_url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
-
     try:
         response = requests.get(tmdb_url)
-        response.raise_for_status()  # Raises HTTPError if 4xx or 5xx status
+        response.raise_for_status()  # Raises HTTPError if 4xx or 5xx
         movie_data = response.json()
-
         return jsonify({
             "Title": movie_data.get("title", "N/A"),
             "Overview": movie_data.get("overview", "No synopsis available"),
@@ -50,7 +64,6 @@ def get_movie_details(movie_id):
                 else "https://via.placeholder.com/500x750?text=No+Image"
             )
         })
-
     except requests.exceptions.HTTPError as http_err:
         if http_err.response.status_code == 404:
             return jsonify({"error": f"Movie with ID {movie_id} not found on TMDB"}), 404
@@ -63,8 +76,8 @@ def get_movie_details(movie_id):
 @app.route('/api/search', methods=['GET'])
 def search_movies():
     """
-    Searches TMDB for movies that match the 'query' param (e.g. /api/search?query=Matrix).
-    Returns a JSON list of matching movies with basic info: title, overview, release date, rating, and poster.
+    Searches TMDB for movies that match the 'query' param.
+    Returns a JSON list of matching movies with basic info.
     """
     query = request.args.get("query")
     if not query:
@@ -101,14 +114,11 @@ def get_trending_movies():
     Caches results in memory for 5 minutes to improve performance.
     """
     current_time = time.time()
-
-    # If cached data is still valid, return from cache
     if (trending_cache["data"] is not None and
         (current_time - trending_cache["timestamp"]) < TRENDING_CACHE_DURATION):
         print("Serving trending movies from cache...")
         return jsonify({"results": trending_cache["data"]})
 
-    # Otherwise, fetch from TMDB
     tmdb_url = f"https://api.themoviedb.org/3/trending/movie/day?api_key={TMDB_API_KEY}"
     response = requests.get(tmdb_url)
 
@@ -139,12 +149,19 @@ def get_trending_movies():
 @app.route('/api/watchlist', methods=['GET'])
 def get_watchlist():
     """
-    Returns the list of movies in our watchlist, along with whether each is favorited.
+    Returns the list of movies in our watchlist, along with whether each is favorited, plus rating.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT movie_id, COALESCE(favourite, 0) FROM watchlist")
-    movies = [{"movie_id": row[0], "favourite": bool(row[1])} for row in cursor.fetchall()]
+    cursor.execute("SELECT movie_id, favourite, rating FROM watchlist")
+    rows = cursor.fetchall()
+    movies = []
+    for row in rows:
+        movies.append({
+            "movie_id": row["movie_id"],
+            "favourite": bool(row["favourite"]),
+            "rating": row["rating"]
+        })
     conn.close()
     return jsonify({"watchlist": movies})
 
@@ -161,13 +178,15 @@ def add_to_watchlist():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT movie_id FROM watchlist WHERE movie_id = ?", (movie_id,))
-    if cursor.fetchone():
-        message = f"Movie {movie_id} is already in the watchlist."
-    else:
+
+    # Check if movie already in watchlist (PRIMARY KEY enforces uniqueness)
+    try:
         cursor.execute("INSERT INTO watchlist (movie_id) VALUES (?)", (movie_id,))
         conn.commit()
         message = f"Movie {movie_id} added to watchlist!"
+    except sqlite3.IntegrityError:
+        # This triggers if we violate the PRIMARY KEY constraint
+        message = f"Movie {movie_id} is already in the watchlist."
 
     conn.close()
     return jsonify({"message": message})
@@ -211,7 +230,7 @@ def toggle_favourite():
         conn.close()
         return jsonify({"error": "Movie not found in watchlist"}), 404
 
-    new_status = 1 if result[0] == 0 else 0
+    new_status = 1 if result["favourite"] == 0 else 0
     cursor.execute("UPDATE watchlist SET favourite = ? WHERE movie_id = ?", (new_status, movie_id))
     conn.commit()
     conn.close()
@@ -222,15 +241,48 @@ def toggle_favourite():
         "favourite": bool(new_status)
     })
 
+@app.route('/api/watchlist/rating', methods=['PUT'])
+def update_movie_rating():
+    """
+    Updates the rating for a movie in the watchlist.
+    """
+    data = request.json
+    movie_id = data.get("movieId")
+    rating = data.get("rating")
+
+    if movie_id is None or rating is None:
+        return jsonify({"error": "movieId and rating are required"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT movie_id FROM watchlist WHERE movie_id = ?", (movie_id,))
+    result = cursor.fetchone()
+    if result is None:
+        conn.close()
+        return jsonify({"error": "Movie not found in watchlist"}), 404
+
+    cursor.execute("UPDATE watchlist SET rating = ? WHERE movie_id = ?", (rating, movie_id))
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "message": f"Rating for movie {movie_id} updated to {rating}.",
+        "rating": rating
+    })
+
 @app.route('/')
 def home():
     """
-    Renders our main HTML page (movie.html), which handles searching, watchlist, etc.
+    Renders our main HTML page (movie.html).
     """
     return render_template("movie.html")
 
 if __name__ == '__main__':
+    # Initialize DB so duplicates are prevented by PRIMARY KEY
+    init_db()
+
     print("Registered Flask Routes:")
     for rule in app.url_map.iter_rules():
         print(f"{rule} -> {rule.methods}")
+
     app.run(debug=True)
