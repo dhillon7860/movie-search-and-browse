@@ -4,71 +4,159 @@
   <meta charset="UTF-8">
   <title>CineMate - Movies, TV, and More</title>
   <style>
-    /* Basic styling */
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; background-color: #f8f9fa; color: #333; }
-    a { color: inherit; text-decoration: none; }
+    /*********************************************************
+     * Basic Resets & Layout
+     *********************************************************/
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f8f9fa;
+      color: #333;
+    }
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
 
+    /*********************************************************
+     * Top Navbar
+     *********************************************************/
     .top-nav {
-      display: flex; align-items: center; justify-content: space-between;
-      background-color: #0d253f; padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background-color: #0d253f;
+      padding: 10px 20px;
     }
     .brand {
-      color: #fff; font-size: 1.5em; font-weight: bold;
+      color: #fff;
+      font-size: 1.5em;
+      font-weight: bold;
     }
-    .nav-links { display: flex; gap: 20px; }
+    .nav-links {
+      display: flex;
+      gap: 20px;
+    }
     .nav-links a {
-      color: #fff; font-weight: 500; padding: 5px; transition: color 0.2s;
+      color: #fff;
+      font-weight: 500;
+      padding: 5px;
+      transition: color 0.2s;
     }
-    .nav-links a:hover { color: #90cea1; }
+    .nav-links a:hover {
+      color: #90cea1;
+    }
 
+    /*********************************************************
+     * Hero Banner
+     *********************************************************/
     .hero {
-      position: relative; width: 100%; height: 400px;
-      background: url('https://www.themoviedb.org/t/p/original/2oEyUWF3APyMlneVZmbF3A2YHuw.jpg') center center / cover no-repeat;
-      display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #fff;
+      position: relative;
+      width: 100%;
+      height: 400px;
+      background: url('https://www.themoviedb.org/t/p/original/2oEyUWF3APyMlneVZmbF3A2YHuw.jpg')
+                  center center / cover no-repeat;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: #fff;
     }
     .hero .hero-overlay {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.5); z-index: 1;
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1;
     }
     .hero-content {
-      z-index: 2; max-width: 600px; padding: 20px;
+      z-index: 2;
+      max-width: 600px;
+      padding: 20px;
     }
-    .hero-content h1 { font-size: 2.5em; margin-bottom: 10px; }
-    .hero-content p { font-size: 1.2em; margin-bottom: 20px; }
+    .hero-content h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+    }
+    .hero-content p {
+      font-size: 1.2em;
+      margin-bottom: 20px;
+    }
     .hero-search {
-      display: flex; justify-content: center; margin: 0 auto; width: 100%; max-width: 500px;
+      display: flex;
+      justify-content: center;
+      margin: 0 auto;
+      width: 100%;
+      max-width: 500px;
     }
     .hero-search input {
-      flex: 1; padding: 10px; font-size: 1em; border: none; border-radius: 4px 0 0 4px; outline: none;
+      flex: 1;
+      padding: 10px;
+      font-size: 1em;
+      border: none;
+      border-radius: 4px 0 0 4px;
+      outline: none;
     }
     .hero-search button {
-      padding: 10px 20px; font-size: 1em; border: none; border-radius: 0 4px 4px 0;
-      background-color: #90cea1; color: #0d253f; font-weight: 600; cursor: pointer;
+      padding: 10px 20px;
+      font-size: 1em;
+      border: none;
+      border-radius: 0 4px 4px 0;
+      background-color: #90cea1;
+      color: #0d253f;
+      font-weight: 600;
+      cursor: pointer;
     }
-    .hero-search button:hover { background-color: #53db9b; }
+    .hero-search button:hover {
+      background-color: #53db9b;
+    }
 
+    /*********************************************************
+     * Container & Sections
+     *********************************************************/
     .container {
-      max-width: 1200px; margin: 20px auto; padding: 0 20px;
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 0 20px;
     }
     .section-box {
-      background: #fff; border: 1px solid #ccc;
-      padding: 15px; margin-bottom: 20px; border-radius: 4px;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
     }
     .section-box h2 {
-      margin-bottom: 10px; font-size: 1.3em; color: #0d253f;
+      margin-bottom: 10px;
+      font-size: 1.3em;
+      color: #0d253f;
     }
 
-    .hidden { display: none !important; }
+    .hidden {
+      display: none !important;
+    }
 
+    /*********************************************************
+     * Star Rating
+     *********************************************************/
     .star {
-      font-size: 24px; color: gray; cursor: pointer; margin-right: 5px;
+      font-size: 24px;
+      color: gray;
+      cursor: pointer;
+      margin-right: 5px;
     }
     .star.selected {
       color: gold;
     }
 
-    /* snippet for .movie_item, .movie_img_rounded, .title */
+    /*********************************************************
+     * Minimally used .movie_item classes
+     *********************************************************/
     .movie_item {
       width: 150px;
       border: 1px solid #ccc;
@@ -86,9 +174,70 @@
       margin: 5px 0;
     }
 
+    /*********************************************************
+     * Trending Movie Row (Fancy Horizontal)
+     *********************************************************/
+    .trend-card {
+      width: 130px;
+      margin-right: 15px;
+      border: 1px solid #e3e3e3;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #fefefe;
+      text-align: center;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .trend-poster {
+      position: relative;
+      width: 100%;
+      height: 190px;
+      background: #ddd;
+      overflow: hidden;
+    }
+    .trend-poster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .score-badge {
+      position: absolute;
+      bottom: 5px;
+      right: 5px;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      padding: 4px 8px;
+      font-size: 0.8em;
+      border-radius: 12px;
+    }
+    .trend-title {
+      font-weight: bold;
+      margin: 5px 0;
+      font-size: 0.95em;
+    }
+    #movies {
+      display: flex;
+      overflow-x: auto;
+      padding: 10px 0;
+    }
+    #movies::-webkit-scrollbar {
+      height: 8px;
+    }
+    #movies::-webkit-scrollbar-thumb {
+      background: #ccc;
+      border-radius: 4px;
+    }
+
+    /*********************************************************
+     * Footer
+     *********************************************************/
     footer {
-      background-color: #0d253f; color: #fff;
-      text-align: center; padding: 10px; margin-top: 40px;
+      background-color: #0d253f;
+      color: #fff;
+      text-align: center;
+      padding: 10px;
+      margin-top: 40px;
     }
   </style>
 </head>
@@ -98,38 +247,54 @@
   <div class="top-nav">
     <div class="brand">CineMate</div>
     <div class="nav-links">
+      <!-- NEW: Home link that goes back to "/" -->
       <a href="/">Home</a>
-      <a href="#" onclick="document.getElementById('advanced-search').classList.toggle('hidden');">Advanced Search</a>
-      <a href="#" onclick="document.getElementById('watchlist-section').classList.toggle('hidden');">My Watchlist</a>
+
+      <!-- Show advanced search on toggling -->
+      <a href="#" onclick="document.getElementById('advanced-search').classList.toggle('hidden');">
+        Advanced Search
+      </a>
+
+      <!-- Show watchlist on toggling -->
+      <a href="#" onclick="document.getElementById('watchlist-section').classList.toggle('hidden');">
+        My Watchlist
+      </a>
     </div>
   </div>
 
-  <!-- Hero -->
+  <!-- Hero Banner -->
   <div class="hero">
     <div class="hero-overlay"></div>
     <div class="hero-content">
-      <h1>Welcome.</h1>
-      <p>Millions of movies, TV shows, and people to discover. Explore now.</p>
+      <h1>Welcome to CineMate</h1>
+      <p>Your all-in-one platform for discovering and tracking amazing films.</p>
       <div class="hero-search">
-        <input type="text" id="movie-name-input" placeholder="Search for a movie, tv show, person...">
+        <input type="text" id="movie-name-input" placeholder="Search a movie title...">
         <button onclick="searchMovies()">Search</button>
       </div>
     </div>
   </div>
 
+  <!-- Main Container -->
   <div class="container">
 
-    <!-- Simple Search Results (TMDb) -->
+    <!-- Basic Search Results (hidden by default) -->
     <div id="simple-search-section" class="section-box hidden">
       <h2>Search Results</h2>
       <div id="search-results-simple"></div>
     </div>
 
-    <!-- Movie Detail Section (TMDb) -->
+    <!-- Movie Detail Section (hidden initially) -->
     <div id="detail-section" class="section-box hidden">
       <h2>Movie Details</h2>
       <div style="display:flex; gap:15px;">
-        <img id="detail-poster" src="" alt="Poster" width="200" style="border:1px solid #ccc;">
+        <img
+          id="detail-poster"
+          src=""
+          alt="Poster"
+          width="200"
+          style="border:1px solid #ccc;"
+        >
         <div>
           <h3 id="detail-title"></h3>
           <p id="detail-release"></p>
@@ -138,7 +303,7 @@
           <div id="detail-cast"></div>
           <div id="detail-trailer"></div>
 
-          <!-- Star Rating for "Your Rating" -->
+          <!-- Star rating area -->
           <h4 style="margin-top:15px;">Rate This Movie</h4>
           <div>
             <span class="star" data-value="1">★</span>
@@ -152,12 +317,10 @@
       </div>
     </div>
 
-    <!-- We removed the old "Trending Movies (TMDb) -> /api/trending" section -->
-
-    <!-- Advanced Search (TMDb) -->
+    <!-- Advanced Search Section -->
     <div id="advanced-search" class="section-box hidden">
-      <h2>Advanced Search &amp; Browse</h2>
-      <p>Refine your search by year, genre, minimum rating, or sorting.</p>
+      <h2>Advanced Search</h2>
+      <p>Refine your search by year, genre, or rating to find the perfect film.</p>
       <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
         <div style="flex: 1; min-width: 120px;">
           <label for="adv-search-query">Title Keywords:</label>
@@ -184,24 +347,26 @@
       <div id="search-results-adv" style="margin-top:15px;"></div>
     </div>
 
-    <!-- My Watchlist (Local DB) -->
+    <!-- My Watchlist -->
     <div id="watchlist-section" class="section-box hidden">
       <h2>My Watchlist</h2>
       <div id="watchlist-container"></div>
     </div>
 
-    <!-- DIRECT snippet: trending/all/week with <div id="movies"> -->
+    <!-- The fancy "Trending Movies This Week" horizontally scrollable row -->
     <div class="section-box">
-      <h2>Trending Movies and TV Shows (Direct “all/week” Approach)</h2>
+      <h2>Trending Movies This Week</h2>
+      <!-- We'll fill this row with JS calls to the trending endpoint -->
       <div id="movies"></div>
     </div>
-
   </div>
 
+  <!-- Footer -->
   <footer>
-    &copy; 2025 CineMate. All rights reserved.
+    &copy; 2025 CineMate. Crafted with passion.
   </footer>
 
+  <!-- Link to your main JavaScript file -->
   <script src="{{ url_for('static', filename='js/movie-details.js') }}" defer></script>
 </body>
 </html>
