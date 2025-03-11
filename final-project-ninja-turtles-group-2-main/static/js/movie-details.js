@@ -3,18 +3,22 @@
 let selectedRating = 0;
 
 document.addEventListener("DOMContentLoaded", function () {
-  console.log("DOM loaded, calling fetchTrendingMovies() to show trending...");
-  fetchTrendingMovies(); // Attempt to get trending right away
+  console.log("DOM loaded...");
 
+  // 1) Direct snippet for trending/all/week from TMDb
+  fetchDirectAllWeek();
+
+  // 2) If there's ?id= in URL, fetch details
   const urlParams = new URLSearchParams(window.location.search);
   const movieId = urlParams.get("id");
   if (movieId) {
     fetchMovieDetails(movieId);
   }
 
+  // 3) Load watchlist
   loadWatchlist();
 
-  // star rating events
+  // 4) Setup star rating
   const stars = document.querySelectorAll(".star");
   stars.forEach(star => {
     star.addEventListener("click", () => {
@@ -26,7 +30,53 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 /**********************************************
- * SIMPLE SEARCH
+ * DIRECT SNIPPET: trending/all/week
+ **********************************************/
+function fetchDirectAllWeek() {
+  // Insert your real TMDb v3 API key
+  const apiKey = "03fb23d2e8ca73070c3bdb09bf268ae6";
+  const apiUrl = `https://api.themoviedb.org/3/trending/movie/week?api_key=${apiKey}`;
+
+  const moviesContainer = document.getElementById("movies");
+  if (!moviesContainer) return;
+
+  fetch(apiUrl)
+    .then(response => response.json())
+    .then(data => {
+      data.results.forEach(media => {
+        const card = createMovieCardDirect(media);
+        moviesContainer.appendChild(card);
+      });
+    })
+    .catch(error => {
+      console.error("Error fetching data (movie/week):", error);
+      moviesContainer.innerHTML = "<p>Failed to load trending movie/week data.</p>";
+    });
+}
+
+function createMovieCardDirect(media) {
+  // media might have "title" for movies or "name" for TV
+  const { id, title, name, backdrop_path } = media;
+
+  const movieCard = document.createElement("div");
+  movieCard.classList.add("movie_item");
+
+  // Include “View Details” and “Add to Watchlist”:
+  movieCard.innerHTML = `
+    <img 
+      src="https://image.tmdb.org/t/p/w500${backdrop_path}" 
+      class="movie_img_rounded" 
+      alt="${title || name}"
+    />
+    <div class="title">${title || name}</div>
+    <button onclick="window.location.href='/?id=${id}'">View Details</button>
+    <button onclick="addToWatchlist(${id})">Add to Watchlist</button>
+  `;
+  return movieCard;
+}
+
+/**********************************************
+ * SEARCH, ADVANCED SEARCH, MOVIE DETAILS
  **********************************************/
 async function searchMovies() {
   const queryInput = document.getElementById("movie-name-input");
@@ -91,9 +141,6 @@ async function searchMovies() {
   }
 }
 
-/**********************************************
- * ADVANCED SEARCH
- **********************************************/
 async function advancedSearch() {
   const q = document.getElementById("adv-search-query")?.value.trim();
   const year = document.getElementById("adv-search-year")?.value.trim();
@@ -153,66 +200,6 @@ async function advancedSearch() {
   }
 }
 
-/**********************************************
- * TRENDING (TMDb popular)
- **********************************************/
-async function fetchTrendingMovies() {
-  console.log("fetchTrendingMovies() called...");
-  try {
-    const resp = await fetch("/api/trending");
-    console.log("fetchTrendingMovies() status:", resp.status);
-    if (!resp.ok) throw new Error("Trending fetch error");
-
-    const data = await resp.json();
-    const trending = data.results || [];
-
-    const container = document.getElementById("trending-results");
-    if (!container) return;
-    container.innerHTML = "";
-
-    if (!trending.length) {
-      container.innerHTML = "<p>No trending movies found.</p>";
-      return;
-    }
-
-    const flex = document.createElement("div");
-    flex.style.display = "flex";
-    flex.style.flexWrap = "wrap";
-    flex.style.gap = "10px";
-
-    trending.forEach(m => {
-      const div = document.createElement("div");
-      div.style.width = "150px";
-      div.style.border = "1px solid #ccc";
-      div.style.borderRadius = "4px";
-      div.style.overflow = "hidden";
-      div.style.textAlign = "center";
-      div.innerHTML = `
-        <img src="${m.poster_url}" alt="${m.title}" width="150">
-        <div style="padding:5px;">
-          <strong>${m.title}</strong><br>
-          (${m.release_date || "Unknown"})<br>
-          Rating: ${m.rating}<br><br>
-          <button onclick="window.location.href='/?id=${m.id}'">View Details</button>
-          <button onclick="addToWatchlist(${m.id})">Add to Watchlist</button>
-        </div>
-      `;
-      flex.appendChild(div);
-    });
-    container.appendChild(flex);
-    console.log("fetchTrendingMovies() success, loaded", trending.length, "movies");
-  } catch (err) {
-    console.error("fetchTrendingMovies() error:", err);
-    const c = document.getElementById("trending-results");
-    if (c) {
-      c.innerHTML = "<p>Failed to load trending movies.</p>";
-    }
-  }
-}
-
-/**********************************************
- * MOVIE DETAILS
- **********************************************/
 async function fetchMovieDetails(movieId) {
   try {
     const resp = await fetch(`/api/movie/${movieId}`);
@@ -399,7 +386,7 @@ async function checkIfInWatchlist(movieId) {
   try {
     const resp = await fetch("/api/watchlist");
     if (!resp.ok) throw new Error("Watchlist fetch error");
-    // no immediate UI updates here
+    // no immediate UI updates
   } catch (err) {
     console.error("checkIfInWatchlist error:", err);
   }

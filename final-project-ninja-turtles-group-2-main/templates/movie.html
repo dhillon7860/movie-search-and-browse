@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>CineMate - Movies, TV, and More</title>
   <style>
-    /* The same styling you have above... */
+    /* Basic styling */
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; background-color: #f8f9fa; color: #333; }
     a { color: inherit; text-decoration: none; }
@@ -61,16 +61,29 @@
 
     .hidden { display: none !important; }
 
-    .trending-grid {
-      display: flex; flex-wrap: wrap; gap: 10px;
-    }
-
-    /* star rating styling */
     .star {
       font-size: 24px; color: gray; cursor: pointer; margin-right: 5px;
     }
     .star.selected {
       color: gold;
+    }
+
+    /* snippet for .movie_item, .movie_img_rounded, .title */
+    .movie_item {
+      width: 150px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      overflow: hidden;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .movie_img_rounded {
+      width: 150px;
+      display: block;
+    }
+    .title {
+      font-weight: bold;
+      margin: 5px 0;
     }
 
     footer {
@@ -106,13 +119,13 @@
 
   <div class="container">
 
-    <!-- Simple Search Results -->
+    <!-- Simple Search Results (TMDb) -->
     <div id="simple-search-section" class="section-box hidden">
       <h2>Search Results</h2>
       <div id="search-results-simple"></div>
     </div>
 
-    <!-- Movie Detail Section -->
+    <!-- Movie Detail Section (TMDb) -->
     <div id="detail-section" class="section-box hidden">
       <h2>Movie Details</h2>
       <div style="display:flex; gap:15px;">
@@ -139,13 +152,9 @@
       </div>
     </div>
 
-    <!-- Trending -->
-    <div class="section-box">
-      <h2>Trending</h2>
-      <div id="trending-results" class="trending-grid"></div>
-    </div>
+    <!-- We removed the old "Trending Movies (TMDb) -> /api/trending" section -->
 
-    <!-- Advanced Search -->
+    <!-- Advanced Search (TMDb) -->
     <div id="advanced-search" class="section-box hidden">
       <h2>Advanced Search &amp; Browse</h2>
       <p>Refine your search by year, genre, minimum rating, or sorting.</p>
@@ -175,11 +184,18 @@
       <div id="search-results-adv" style="margin-top:15px;"></div>
     </div>
 
-    <!-- My Watchlist -->
+    <!-- My Watchlist (Local DB) -->
     <div id="watchlist-section" class="section-box hidden">
       <h2>My Watchlist</h2>
       <div id="watchlist-container"></div>
     </div>
+
+    <!-- DIRECT snippet: trending/all/week with <div id="movies"> -->
+    <div class="section-box">
+      <h2>Trending Movies and TV Shows (Direct “all/week” Approach)</h2>
+      <div id="movies"></div>
+    </div>
+
   </div>
 
   <footer>

@@ -1,14 +1,13 @@
 import sqlite3
 import requests
-import time
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 CORS(app)
 
-# Your TMDb API key for searching, details, and now "popular" trending
-TMDB_API_KEY = "6b97f08c49abba25cf0cfc6de133bd9c"
+# TMDb v3 API key
+TMDB_API_KEY = "03fb23d2e8ca73070c3bdb09bf268ae6"
 
 def init_db():
     """Initializes watchlist.db if not present."""
@@ -30,41 +29,7 @@ def home():
     return render_template("movie.html")
 
 # ------------------------------------------------------------------------
-# TRENDING MOVIES (Using TMDb's /movie/popular Instead)
-# ------------------------------------------------------------------------
-@app.route('/api/trending', methods=['GET'])
-def get_trending_movies():
-    """
-    Calls TMDb’s "popular" endpoint:
-      GET https://api.themoviedb.org/3/movie/popular?api_key=...
-    We label it "trending" so the front-end code can remain the same.
-    """
-    url = f"https://api.themoviedb.org/3/movie/popular?api_key={TMDB_API_KEY}&language=en-US"
-    resp = requests.get(url)
-
-    if resp.status_code == 200:
-        data = resp.json().get("results", [])
-        results = []
-        for item in data:
-            results.append({
-                "id": item["id"],
-                "title": item.get("title", "N/A"),
-                "overview": item.get("overview", ""),
-                "release_date": item.get("release_date", "Unknown"),
-                "rating": item.get("vote_average", "N/A"),
-                "poster_url": (
-                    f"https://image.tmdb.org/t/p/w500{item.get('poster_path')}"
-                    if item.get("poster_path")
-                    else "https://via.placeholder.com/500x750?text=No+Image"
-                )
-            })
-        return jsonify({"results": results})
-    else:
-        print("TMDb popular fetch failed. Status:", resp.status_code, "Body:", resp.text)
-        return jsonify({"error": "Failed to load trending movies from TMDb"}), resp.status_code
-
-# ------------------------------------------------------------------------
-# SEARCH (TMDb) – same as your existing code
+# SEARCH (TMDb)
 # ------------------------------------------------------------------------
 @app.route('/api/search', methods=['GET'])
 def search_movies():
@@ -122,17 +87,20 @@ def search_movies():
 # ------------------------------------------------------------------------
 @app.route('/api/movie/<int:movie_id>', methods=['GET'])
 def get_movie_details(movie_id):
-    base_url = "https://api.themoviedb.org/3"
-    params = {"api_key": TMDB_API_KEY, "language": "en-US"}
+    params = {
+        "api_key": TMDB_API_KEY,
+        "language": "en-US"
+    }
 
     try:
-        resp_main = requests.get(f"{base_url}/movie/{movie_id}", params=params)
+        resp_main = requests.get(f"https://api.themoviedb.org/3/movie/{movie_id}", params=params)
         resp_main.raise_for_status()
         main_data = resp_main.json()
 
-        resp_credits = requests.get(f"{base_url}/movie/{movie_id}/credits", params=params)
+        resp_credits = requests.get(f"https://api.themoviedb.org/3/movie/{movie_id}/credits", params=params)
         resp_credits.raise_for_status()
         credits_data = resp_credits.json()
+
         cast_info = []
         for c in credits_data.get("cast", [])[:5]:
             cast_info.append({
@@ -140,7 +108,7 @@ def get_movie_details(movie_id):
                 "character": c.get("character", "")
             })
 
-        resp_videos = requests.get(f"{base_url}/movie/{movie_id}/videos", params=params)
+        resp_videos = requests.get(f"https://api.themoviedb.org/3/movie/{movie_id}/videos", params=params)
         resp_videos.raise_for_status()
         videos_data = resp_videos.json()
 
@@ -163,16 +131,17 @@ def get_movie_details(movie_id):
             "Cast": cast_info,
             "Trailer": trailer_url
         })
+
     except requests.exceptions.HTTPError as http_err:
         if http_err.response.status_code == 404:
-            return jsonify({"error": f"Movie with ID {movie_id} not found on TMDB"}), 404
+            return jsonify({"error": f"Movie with ID {movie_id} not found"}), 404
         else:
-            return jsonify({"error": f"TMDB HTTP error: {str(http_err)}"}), http_err.response.status_code
+            return jsonify({"error": f"HTTP error: {str(http_err)}"}), resp_main.status_code
     except requests.exceptions.RequestException:
         return jsonify({"error": "Failed to fetch movie details"}), 500
 
 # ------------------------------------------------------------------------
-# WATCHLIST - local SQLite DB
+# WATCHLIST - local DB
 # ------------------------------------------------------------------------
 def get_db_connection():
     conn = sqlite3.connect("watchlist.db")
