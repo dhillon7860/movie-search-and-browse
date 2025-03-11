@@ -154,14 +154,15 @@ async function advancedSearch() {
 }
 
 /**********************************************
- * TRENDING
+ * TRENDING (TMDb popular)
  **********************************************/
 async function fetchTrendingMovies() {
   console.log("fetchTrendingMovies() called...");
   try {
     const resp = await fetch("/api/trending");
-    console.log("fetchTrendingMovies() status:", resp.status); // Log the response code
+    console.log("fetchTrendingMovies() status:", resp.status);
     if (!resp.ok) throw new Error("Trending fetch error");
+
     const data = await resp.json();
     const trending = data.results || [];
 
@@ -395,11 +396,10 @@ function updateFavouriteButton(movieId, isFav) {
  * CHECK WATCHLIST / FAV
  **********************************************/
 async function checkIfInWatchlist(movieId) {
-  // If you want to do something on detail load
   try {
     const resp = await fetch("/api/watchlist");
     if (!resp.ok) throw new Error("Watchlist fetch error");
-    // no UI changes needed unless you want
+    // no immediate UI updates here
   } catch (err) {
     console.error("checkIfInWatchlist error:", err);
   }
