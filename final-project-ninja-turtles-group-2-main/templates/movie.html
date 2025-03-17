@@ -175,7 +175,7 @@
     }
 
     /*********************************************************
-     * Trending Movie Row (Fancy Horizontal)
+     * Trending row
      *********************************************************/
     .trend-card {
       width: 130px;
@@ -247,17 +247,17 @@
   <div class="top-nav">
     <div class="brand">CineMate</div>
     <div class="nav-links">
-      <!-- NEW: Home link that goes back to "/" -->
       <a href="/">Home</a>
-
-      <!-- Show advanced search on toggling -->
       <a href="#" onclick="document.getElementById('advanced-search').classList.toggle('hidden');">
         Advanced Search
       </a>
-
-      <!-- Show watchlist on toggling -->
       <a href="#" onclick="document.getElementById('watchlist-section').classList.toggle('hidden');">
         My Watchlist
+      </a>
+      <!-- Recommendation link toggles the rec section & fetches recommendations -->
+      <a href="#"
+         onclick="document.getElementById('recommendations-section').classList.toggle('hidden'); fetchPersonalRecommendations();">
+        Recommendations
       </a>
     </div>
   </div>
@@ -269,7 +269,11 @@
       <h1>Welcome to CineMate</h1>
       <p>Your all-in-one platform for discovering and tracking amazing films.</p>
       <div class="hero-search">
-        <input type="text" id="movie-name-input" placeholder="Search a movie title...">
+        <input
+          type="text"
+          id="movie-name-input"
+          placeholder="Search a movie title..."
+        >
         <button onclick="searchMovies()">Search</button>
       </div>
     </div>
@@ -278,13 +282,13 @@
   <!-- Main Container -->
   <div class="container">
 
-    <!-- Basic Search Results (hidden by default) -->
+    <!-- Basic Search Results -->
     <div id="simple-search-section" class="section-box hidden">
       <h2>Search Results</h2>
       <div id="search-results-simple"></div>
     </div>
 
-    <!-- Movie Detail Section (hidden initially) -->
+    <!-- Movie Detail Section -->
     <div id="detail-section" class="section-box hidden">
       <h2>Movie Details</h2>
       <div style="display:flex; gap:15px;">
@@ -303,7 +307,7 @@
           <div id="detail-cast"></div>
           <div id="detail-trailer"></div>
 
-          <!-- Star rating area -->
+          <!-- Star rating -->
           <h4 style="margin-top:15px;">Rate This Movie</h4>
           <div>
             <span class="star" data-value="1">★</span>
@@ -317,7 +321,7 @@
       </div>
     </div>
 
-    <!-- Advanced Search Section -->
+    <!-- Advanced Search -->
     <div id="advanced-search" class="section-box hidden">
       <h2>Advanced Search</h2>
       <p>Refine your search by year, genre, or rating to find the perfect film.</p>
@@ -353,20 +357,25 @@
       <div id="watchlist-container"></div>
     </div>
 
-    <!-- The fancy "Trending Movies This Week" horizontally scrollable row -->
+    <!-- “Trending Movies This Week” horizontally scrollable row -->
     <div class="section-box">
       <h2>Trending Movies This Week</h2>
-      <!-- We'll fill this row with JS calls to the trending endpoint -->
       <div id="movies"></div>
     </div>
+
+    <!-- Personalized Recommendations -->
+    <div id="recommendations-section" class="section-box hidden">
+      <h2>Your Personalized Recommendations</h2>
+      <div id="recommendations-container"></div>
+    </div>
+
   </div>
 
-  <!-- Footer -->
   <footer>
     &copy; 2025 CineMate. Crafted with passion.
   </footer>
 
-  <!-- Link to your main JavaScript file -->
+  <!-- Link to your main JS -->
   <script src="{{ url_for('static', filename='js/movie-details.js') }}" defer></script>
 </body>
 </html>

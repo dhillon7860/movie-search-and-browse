@@ -1,9 +1,10 @@
 """
 app.py
-Flask back-end for CineMate:
- - Local watchlist (SQLite)
- - TMDb-based search & details
- - Serves movie.html front-end
+Flask back-end for CineMate, including:
+ - TMDb search & details
+ - Local SQLite watchlist
+ - Trending & recommended movies
+Serves the single-page front-end at movie.html
 """
 
 import sqlite3
@@ -14,12 +15,11 @@ from flask_cors import CORS
 app = Flask(__name__, template_folder="templates", static_folder="static")
 CORS(app)
 
-# Your TMDb v3 API key
+# --- 1) Your TMDb API key
 TMDB_API_KEY = "03fb23d2e8ca73070c3bdb09bf268ae6"
 
-
 def init_db():
-    """Initialize watchlist.db if not present."""
+    """Create or verify the watchlist.db structure."""
     conn = sqlite3.connect("watchlist.db")
     c = conn.cursor()
     c.execute("""
@@ -32,23 +32,20 @@ def init_db():
     conn.commit()
     conn.close()
 
-
-@app.route('/')
+@app.route("/")
 def home():
-    """Renders movie.html (single-page front-end)."""
+    """Serve the front-end HTML (movie.html)."""
     return render_template("movie.html")
 
-
-##############################################################################
-# SEARCH (TMDb)
-##############################################################################
-@app.route('/api/search', methods=['GET'])
+# ----------------------------------------------------------------------
+# (A) SEARCH & ADVANCED SEARCH (TMDb)
+# ----------------------------------------------------------------------
+@app.route("/api/search", methods=["GET"])
 def search_movies():
-    """Endpoint: /api/search?query=Batman&year=1999&..."""
     base_url_search = "https://api.themoviedb.org/3/search/movie"
     base_url_discover = "https://api.themoviedb.org/3/discover/movie"
 
-    q = request.args.get("query")
+    query = request.args.get("query")
     year = request.args.get("year")
     genre = request.args.get("genre")
     min_rating = request.args.get("minRating")
@@ -60,8 +57,9 @@ def search_movies():
         "include_adult": "false"
     }
 
-    if q:
-        tmdb_params["query"] = q
+    # Basic or advanced search logic
+    if query:
+        tmdb_params["query"] = query
         resp = requests.get(base_url_search, params=tmdb_params)
     else:
         if year:
@@ -94,48 +92,40 @@ def search_movies():
     else:
         return jsonify({"error": "Failed to fetch search results"}), 500
 
-
-##############################################################################
-# MOVIE DETAILS (TMDb)
-##############################################################################
-@app.route('/api/movie/<int:movie_id>', methods=['GET'])
+# ----------------------------------------------------------------------
+# (B) MOVIE DETAILS (TMDb)
+# ----------------------------------------------------------------------
+@app.route("/api/movie/<int:movie_id>", methods=["GET"])
 def get_movie_details(movie_id):
-    """GET /api/movie/<movie_id> -> JSON with full details."""
-    params = {
-        "api_key": TMDB_API_KEY,
-        "language": "en-US"
-    }
+    """Fetch detailed info for a single movie ID from TMDb."""
+    base_url = "https://api.themoviedb.org/3/movie"
+    params = {"api_key": TMDB_API_KEY, "language": "en-US"}
 
     try:
-        resp_main = requests.get(f"https://api.themoviedb.org/3/movie/{movie_id}", params=params)
+        # Main info
+        resp_main = requests.get(f"{base_url}/{movie_id}", params=params)
         resp_main.raise_for_status()
         main_data = resp_main.json()
 
-        resp_credits = requests.get(
-            f"https://api.themoviedb.org/3/movie/{movie_id}/credits",
-            params=params
-        )
-        resp_credits.raise_for_status()
-        credits_data = resp_credits.json()
-
-        cast_info = []
-        for c in credits_data.get("cast", [])[:5]:
-            cast_info.append({
+        # Cast
+        resp_cast = requests.get(f"{base_url}/{movie_id}/credits", params=params)
+        resp_cast.raise_for_status()
+        cast_data = resp_cast.json()
+        cast_list = []
+        for c in cast_data.get("cast", [])[:5]:
+            cast_list.append({
                 "name": c.get("name", "Unknown"),
                 "character": c.get("character", "")
             })
 
-        resp_videos = requests.get(
-            f"https://api.themoviedb.org/3/movie/{movie_id}/videos",
-            params=params
-        )
-        resp_videos.raise_for_status()
-        videos_data = resp_videos.json()
-
+        # Trailer
+        resp_vid = requests.get(f"{base_url}/{movie_id}/videos", params=params)
+        resp_vid.raise_for_status()
+        vid_data = resp_vid.json()
         trailer_url = None
-        for vid in videos_data.get("results", []):
-            if vid.get("site") == "YouTube" and "trailer" in vid.get("type", "").lower():
-                trailer_url = f"https://www.youtube.com/watch?v={vid['key']}"
+        for v in vid_data.get("results", []):
+            if v.get("site") == "YouTube" and "trailer" in v.get("type", "").lower():
+                trailer_url = f"https://www.youtube.com/watch?v={v['key']}"
                 break
 
         return jsonify({
@@ -148,7 +138,7 @@ def get_movie_details(movie_id):
                 if main_data.get("poster_path")
                 else "https://via.placeholder.com/500x750?text=No+Image"
             ),
-            "Cast": cast_info,
+            "Cast": cast_list,
             "Trailer": trailer_url
         })
 
@@ -160,22 +150,18 @@ def get_movie_details(movie_id):
     except requests.exceptions.RequestException:
         return jsonify({"error": "Failed to fetch movie details"}), 500
 
-
-##############################################################################
-# WATCHLIST (SQLITE)
-##############################################################################
+# ----------------------------------------------------------------------
+# (C) WATCHLIST (SQLITE)
+# ----------------------------------------------------------------------
 def get_db_connection():
     conn = sqlite3.connect("watchlist.db")
     conn.row_factory = sqlite3.Row
     return conn
 
-
-@app.route('/api/watchlist', methods=['GET'])
+@app.route("/api/watchlist", methods=["GET"])
 def get_watchlist():
     conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT movie_id, favourite, rating FROM watchlist")
-    rows = c.fetchall()
+    rows = conn.execute("SELECT movie_id, favourite, rating FROM watchlist").fetchall()
     conn.close()
 
     output = []
@@ -187,96 +173,142 @@ def get_watchlist():
         })
     return jsonify({"watchlist": output})
 
-
-@app.route('/api/watchlist', methods=['POST'])
+@app.route("/api/watchlist", methods=["POST"])
 def add_to_watchlist():
     data = request.json
-    movie_id = data.get("movieId")
-    if not movie_id:
+    m_id = data.get("movieId")
+    if not m_id:
         return jsonify({"error": "movieId is required"}), 400
 
     conn = get_db_connection()
     try:
-        conn.execute("INSERT INTO watchlist (movie_id) VALUES (?)", (movie_id,))
+        conn.execute("INSERT INTO watchlist (movie_id) VALUES (?)", (m_id,))
         conn.commit()
-        msg = f"Movie {movie_id} added to watchlist!"
+        msg = f"Movie {m_id} added to watchlist!"
     except sqlite3.IntegrityError:
-        msg = f"Movie {movie_id} is already in the watchlist."
-    finally:
-        conn.close()
+        msg = f"Movie {m_id} is already in the watchlist."
+    conn.close()
     return jsonify({"message": msg})
 
-
-@app.route('/api/watchlist', methods=['DELETE'])
+@app.route("/api/watchlist", methods=["DELETE"])
 def remove_from_watchlist():
     data = request.json
-    movie_id = data.get("movieId")
-    if not movie_id:
+    m_id = data.get("movieId")
+    if not m_id:
         return jsonify({"error": "movieId is required"}), 400
 
     conn = get_db_connection()
-    conn.execute("DELETE FROM watchlist WHERE movie_id = ?", (movie_id,))
+    conn.execute("DELETE FROM watchlist WHERE movie_id = ?", (m_id,))
     conn.commit()
     conn.close()
 
-    return jsonify({"message": f"Movie {movie_id} removed from watchlist!"})
+    return jsonify({"message": f"Movie {m_id} removed from watchlist!"})
 
-
-@app.route('/api/watchlist/favourite', methods=['PUT'])
+@app.route("/api/watchlist/favourite", methods=["PUT"])
 def toggle_favourite():
     data = request.json
-    movie_id = data.get("movieId")
-    if not movie_id:
+    m_id = data.get("movieId")
+    if not m_id:
         return jsonify({"error": "movieId is required"}), 400
 
     conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT favourite FROM watchlist WHERE movie_id = ?", (movie_id,))
-    row = c.fetchone()
+    row = conn.execute(
+        "SELECT favourite FROM watchlist WHERE movie_id = ?",
+        (m_id,)
+    ).fetchone()
     if not row:
         conn.close()
         return jsonify({"error": "Movie not found in watchlist"}), 404
 
-    new_status = 1 if row[0] == 0 else 0
-    c.execute("UPDATE watchlist SET favourite = ? WHERE movie_id = ?", (new_status, movie_id))
+    new_val = 1 if row[0] == 0 else 0
+    conn.execute(
+        "UPDATE watchlist SET favourite = ? WHERE movie_id = ?",
+        (new_val, m_id)
+    )
     conn.commit()
     conn.close()
 
-    msg = "marked as favourite" if new_status else "removed from favourites"
+    msg = "marked as favourite" if new_val else "removed from favourites"
     return jsonify({
-        "message": f"Movie {movie_id} {msg}!",
-        "favourite": bool(new_status)
+        "message": f"Movie {m_id} {msg}!",
+        "favourite": bool(new_val)
     })
 
-
-@app.route('/api/watchlist/rating', methods=['PUT'])
+@app.route("/api/watchlist/rating", methods=["PUT"])
 def update_movie_rating():
     data = request.json
-    movie_id = data.get("movieId")
+    m_id = data.get("movieId")
     rating = data.get("rating")
 
-    if movie_id is None or rating is None:
+    if m_id is None or rating is None:
         return jsonify({"error": "movieId and rating are required"}), 400
 
     conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT movie_id FROM watchlist WHERE movie_id = ?", (movie_id,))
-    row = c.fetchone()
+    row = conn.execute(
+        "SELECT movie_id FROM watchlist WHERE movie_id = ?",
+        (m_id,)
+    ).fetchone()
     if not row:
         conn.close()
         return jsonify({"error": "Movie not found in watchlist"}), 404
 
-    c.execute("UPDATE watchlist SET rating = ? WHERE movie_id = ?", (rating, movie_id))
+    conn.execute(
+        "UPDATE watchlist SET rating = ? WHERE movie_id = ?",
+        (rating, m_id)
+    )
     conn.commit()
     conn.close()
 
     return jsonify({
-        "message": f"Rating for movie {movie_id} updated to {rating}.",
+        "message": f"Rating for movie {m_id} updated to {rating}.",
         "rating": rating
     })
 
+# ----------------------------------------------------------------------
+# (D) PERSONALIZED RECOMMENDATIONS (MOVIES ONLY)
+#     Calls /movie/<id>/recommendations for each watchlist item
+# ----------------------------------------------------------------------
+@app.route("/api/recommendations", methods=["GET"])
+def get_personal_recommendations():
+    conn = get_db_connection()
+    rows = conn.execute("SELECT movie_id FROM watchlist").fetchall()
+    conn.close()
 
-if __name__ == '__main__':
+    rec_map = {}
+    for r in rows:
+        m_id = r["movie_id"]
+        url = f"https://api.themoviedb.org/3/movie/{m_id}/recommendations"
+        params = {"api_key": TMDB_API_KEY, "language": "en-US"}
+
+        try:
+            resp = requests.get(url, params=params)
+            if resp.status_code == 200:
+                data = resp.json().get("results", [])
+                for rec in data:
+                    rid = rec["id"]
+                    rec_map[rid] = {
+                        "id": rid,
+                        "title": rec.get("title", "N/A"),
+                        "overview": rec.get("overview", ""),
+                        "release_date": rec.get("release_date", ""),
+                        "rating": rec.get("vote_average", 0),
+                        "poster_url": (
+                            f"https://image.tmdb.org/t/p/w500{rec['poster_path']}"
+                            if rec.get("poster_path")
+                            else "https://via.placeholder.com/500x750?text=No+Image"
+                        )
+                    }
+            else:
+                print(f"Recommendations failed for {m_id}, status {resp.status_code}")
+
+        except requests.exceptions.RequestException as e:
+            print("Error fetching recs for movie_id=", m_id, "->", e)
+
+    # Convert dict to list, optionally limit
+    final_list = list(rec_map.values())[:20]
+    return jsonify({"results": final_list})
+
+if __name__ == "__main__":
     init_db()
     print("Registered Flask Routes:")
     for rule in app.url_map.iter_rules():

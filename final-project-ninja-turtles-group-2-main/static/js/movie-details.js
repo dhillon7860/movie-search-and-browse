@@ -1,21 +1,23 @@
 /******************************************************************************
  movie-details.js
  Purpose:
-   - Fetch trending movies for the week in a horizontal scroller
-   - Basic search & advanced search calls
+   - Show trending movies for the week in a horizontal scroller
+   - Provide basic & advanced searches
    - Display movie details
-   - Manage a local watchlist (favorite toggles, ratings)
+   - Manage a local watchlist (add/remove, favourite toggle, rating)
+   - Provide personalized "Recommendations" from TMDb
 ******************************************************************************/
 
 let selectedRating = 0;
 
+// On page load
 document.addEventListener("DOMContentLoaded", function () {
-  console.log("DOM loaded -> Attempting to fetch trending 'week' movies...");
+  console.log("DOM loaded...");
 
-  // 1) Fetch trending movies this week from TMDb
+  // 1) Fetch trending movies for the week
   fetchTrendingMoviesWeek();
 
-  // 2) If there's ?id= in URL, load that movie's details
+  // 2) If there's ?id in URL, fetch that movie’s details
   const urlParams = new URLSearchParams(window.location.search);
   const movieId = urlParams.get("id");
   if (movieId) {
@@ -25,7 +27,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // 3) Load watchlist from local DB
   loadWatchlist();
 
-  // 4) Setup star rating clicks
+  // 4) Setup star rating
   const stars = document.querySelectorAll(".star");
   stars.forEach(star => {
     star.addEventListener("click", () => {
@@ -37,42 +39,41 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 /******************************************************************************
- * TRENDING MOVIES THIS WEEK
- ******************************************************************************/
+ * A) TRENDING MOVIES (WEEK)
+******************************************************************************/
 function fetchTrendingMoviesWeek() {
   const container = document.getElementById("movies");
   if (!container) return;
 
   const tmdbKey = "03fb23d2e8ca73070c3bdb09bf268ae6";
-  const trendUrl = `https://api.themoviedb.org/3/trending/movie/week?api_key=${tmdbKey}`;
+  const url = `https://api.themoviedb.org/3/trending/movie/week?api_key=${tmdbKey}`;
 
-  fetch(trendUrl)
+  fetch(url)
     .then(resp => resp.json())
     .then(data => {
       if (!data.results || !data.results.length) {
         container.innerHTML = "<p>No trending data found for this week.</p>";
         return;
       }
-      // We'll place them in a horizontal row with fancy styling
       data.results.forEach(movie => {
-        const card = createTrendWeekCard(movie);
+        const card = createTrendCard(movie);
         container.appendChild(card);
       });
     })
     .catch(err => {
-      console.error("Failed to fetch trending movies this week:", err);
+      console.error("Error loading trending week movies:", err);
       container.innerHTML = "<p>Failed to load trending movies this week.</p>";
     });
 }
 
-/** Creates a horizontally friendly card with a "score" and "Add to Watchlist" */
-function createTrendWeekCard(movie) {
-  const { id, title, name, poster_path, vote_average, release_date } = movie;
-  const displayTitle = title || name || "Untitled";
+function createTrendCard(movie) {
+  const { id, title, poster_path, vote_average, release_date } = movie;
+  const displayTitle = title || "Untitled";
   const posterUrl = poster_path
     ? `https://image.tmdb.org/t/p/w500${poster_path}`
     : "https://via.placeholder.com/500x750?text=No+Image";
   const userScore = vote_average ? `${(vote_average * 10).toFixed(0)}%` : "N/A";
+
   const card = document.createElement("div");
   card.classList.add("trend-card");
 
@@ -91,8 +92,8 @@ function createTrendWeekCard(movie) {
 }
 
 /******************************************************************************
- * SEARCH: Basic & Advanced
- ******************************************************************************/
+ * B) BASIC SEARCH & ADVANCED SEARCH
+******************************************************************************/
 async function searchMovies() {
   const inputElem = document.getElementById("movie-name-input");
   if (!inputElem) {
@@ -108,11 +109,12 @@ async function searchMovies() {
   try {
     const resp = await fetch(`/api/search?query=${encodeURIComponent(query)}`);
     if (!resp.ok) throw new Error("search fetch error");
+
     const data = await resp.json();
     const results = data.results || [];
-
     const section = document.getElementById("simple-search-section");
     const resultsBox = document.getElementById("search-results-simple");
+
     if (section) section.classList.remove("hidden");
     if (!resultsBox) return;
 
@@ -149,13 +151,10 @@ async function searchMovies() {
     });
 
     resultsBox.appendChild(flexWrap);
-
   } catch (err) {
     console.error("searchMovies error:", err);
     const resultsBox = document.getElementById("search-results-simple");
-    if (resultsBox) {
-      resultsBox.innerHTML = "<p>Failed to fetch search results.</p>";
-    }
+    if (resultsBox) resultsBox.innerHTML = "<p>Failed to fetch search results.</p>";
   }
 }
 
@@ -177,10 +176,11 @@ async function advancedSearch() {
     const resp = await fetch(url);
     if (!resp.ok) throw new Error("advanced search error");
     const data = await resp.json();
+
     const advBox = document.getElementById("search-results-adv");
     if (!advBox) return;
-    advBox.innerHTML = "";
 
+    advBox.innerHTML = "";
     const items = data.results || [];
     if (!items.length) {
       advBox.innerHTML = "<p>No advanced matches found.</p>";
@@ -223,8 +223,8 @@ async function advancedSearch() {
 }
 
 /******************************************************************************
- * MOVIE DETAILS
- ******************************************************************************/
+ * C) MOVIE DETAILS
+******************************************************************************/
 async function fetchMovieDetails(movieId) {
   try {
     const resp = await fetch(`/api/movie/${movieId}`);
@@ -236,6 +236,7 @@ async function fetchMovieDetails(movieId) {
     const data = await resp.json();
     updateMovieUI(data);
 
+    // Also check if in watchlist & if it's favourited
     checkIfInWatchlist(movieId);
     checkIfFavourite(movieId);
   } catch (err) {
@@ -299,8 +300,8 @@ function updateMovieUI(data) {
 }
 
 /******************************************************************************
- * WATCHLIST
- ******************************************************************************/
+ * D) WATCHLIST
+******************************************************************************/
 async function addToWatchlist(movieId) {
   try {
     const resp = await fetch("/api/watchlist", {
@@ -380,8 +381,8 @@ async function loadWatchlist() {
 }
 
 /******************************************************************************
- * FAVOURITES
- ******************************************************************************/
+ * E) FAVOURITES
+******************************************************************************/
 async function toggleFavourite(movieId) {
   if (!movieId) return;
   try {
@@ -409,10 +410,9 @@ function updateFavouriteButton(movieId, isFav) {
 }
 
 /******************************************************************************
- * CHECK WATCHLIST / FAV
- ******************************************************************************/
+ * F) CHECK WATCHLIST / FAVOURITE
+******************************************************************************/
 async function checkIfInWatchlist(movieId) {
-  // currently no direct UI effect
   try {
     const resp = await fetch("/api/watchlist");
     if (!resp.ok) throw new Error("checkIfInWatchlist fetch error");
@@ -434,8 +434,8 @@ async function checkIfFavourite(movieId) {
 }
 
 /******************************************************************************
- * STAR RATING
- ******************************************************************************/
+ * G) STAR RATING
+******************************************************************************/
 function highlightStars(rating) {
   const allStars = document.querySelectorAll(".star");
   allStars.forEach(s => {
@@ -467,5 +467,61 @@ async function submitRating() {
     }
   } catch (err) {
     console.error("submitRating error:", err);
+  }
+}
+
+/******************************************************************************
+ * H) PERSONALIZED RECOMMENDATIONS
+ *    We call /api/recommendations to gather them
+******************************************************************************/
+async function fetchPersonalRecommendations() {
+  try {
+    const resp = await fetch("/api/recommendations");
+    if (!resp.ok) throw new Error("recommendations fetch error");
+    const data = await resp.json();
+    const recs = data.results || [];
+
+    const container = document.getElementById("recommendations-container");
+    if (!container) return;
+    container.innerHTML = "";
+
+    if (!recs.length) {
+      container.innerHTML = "<p>No personalized recommendations found.</p>";
+      return;
+    }
+
+    // style them like a small grid
+    const flexWrap = document.createElement("div");
+    flexWrap.style.display = "flex";
+    flexWrap.style.flexWrap = "wrap";
+    flexWrap.style.gap = "10px";
+
+    recs.forEach(r => {
+      const card = document.createElement("div");
+      card.style.width = "150px";
+      card.style.border = "1px solid #ccc";
+      card.style.borderRadius = "4px";
+      card.style.overflow = "hidden";
+      card.style.textAlign = "center";
+
+      card.innerHTML = `
+        <img src="${r.poster_url}" alt="${r.title}" width="150">
+        <div style="padding:5px;">
+          <strong>${r.title}</strong><br>
+          (${r.release_date || "Unknown"})<br>
+          Rating: ${r.rating}<br><br>
+          <button onclick="window.location.href='/?id=${r.id}'">View Details</button>
+          <button onclick="addToWatchlist(${r.id})">Add to Watchlist</button>
+        </div>
+      `;
+      flexWrap.appendChild(card);
+    });
+
+    container.appendChild(flexWrap);
+
+  } catch (err) {
+    console.error("fetchPersonalRecommendations error:", err);
+    const c = document.getElementById("recommendations-container");
+    if (c) c.innerHTML = "<p>Failed to load recommendations.</p>";
   }
 }
